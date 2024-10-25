@@ -2,21 +2,25 @@
 # Recebe o pedido dos clientes, vê qual é o cliente, e quais são os seus vizinhos
 # Devolve essa lista de vizinhos
 
+import sys
 import socket
 import threading
+from typing import Tuple
 
 
 class Bootstrapper:
-    def __init__(self, filename: str, host='', port=6000) -> None:
-        self.host = host
+    def __init__(self, ip:str, port:int=8080, filename:str='t1.imn') -> None:
+        self.ip = ip
         self.port = port
-        self.socket = None
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.connections = {}
 
         self.fillConections(filename)
-        self.createSocket()
 
-    def fill_conections(self, filename: str) -> None:
+    def fillConections(self, filename: str) -> None:
+        """
+        Função que percorre o ficheiro .imn e que preenche o dict self.connections, com os vizinhos de cada Node.
+        """
         # Ler o ficheiro da topologia f"../topologias/{filename}"
         # Popular o self.connectios
         # parsing do ficheiro imn para cada nodo
@@ -27,34 +31,41 @@ class Bootstrapper:
         # Ex: self.connections[hostname] = neighbours
         pass
 
-    def createSocket(self) -> None:
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.bind(self.host, self.port)
-
-
     # Função para lidar com nós que se conectam ao controlador
-    def handle_node(self, node_socket, node_address) -> None:
-        print(f"[INFO] Node conectado: {node_address}")
+    def handleNode(self, nodeSocket:socket.socket, nodeAddress:Tuple[str,int]) -> None:
+        """
+        Função que envia a lista de vizinhos a cada Node.
+        """
+        print(f"[INFO] Node conectado: {nodeAddress}")
         
-        # Envia a lista de vizinhos (neste exemplo, os dois primeiros nós)
+        # Envia a lista de vizinhos
         #neighbors = self.connections[node_address[0]] # TODO: Verificar se é a forma correta
         #response = neighbors.enco()
         #node_socket.send(response)
         #node_socket.close()
         pass
 
-# Gerir os nós que se vão ligando
-    def start_bootstrapper(self) -> None:
-        self.socket.listen(5)
-        print(f"[INFO] Bootstrapper escutando em {self.host}:{self.port}")
+    def startBootstrapper(self) -> None:
+        """
+        Função que aceita as conexões dos Nodes e cria uma thread para lidar com cada uma.
+        """
+        self.socket.bind((self.ip, self.port))
+        self.socket.listen()
+        print(f"[INFO] Bootstrapper escutando em {self.ip}:{self.port}")
 
         while True:
-            node_socket, addr = self.socket.accept()
-            node_handler = threading.Thread(target=self.handle_node, args=(self, node_socket, addr))
-            node_handler.start()
+            nodeSocket, addr = self.socket.accept()
+            print(f"Node {addr} connected!")
+            nodeHandler = threading.Thread(target=self.handleNode, args=(self, nodeSocket, addr))
+            nodeHandler.start()
 
-# Executar o Bootstrapper
 if __name__ == "__main__":
-    filename = input("Nome do ficheiro da topologia: ")
-    bs = Bootstrapper(filename)
-    bs.start_bootstrapper()
+    if len(sys.argv) < 4:
+        print("Usage: python3 bootstrapper.py <bootstrapIp> <bootstrapPort> <bootstrapFilename>")
+        sys.exit(1)
+    bootstrapIp = sys.argv[1]
+    bootstrapPort = int(sys.argv[2])
+    bootstrapFilename = sys.argv[3]
+    # TODO: Verificar se o ficheiro existe
+    bs = Bootstrapper(bootstrapIp, bootstrapPort, bootstrapFilename)
+    bs.startBootstrapper()
