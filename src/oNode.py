@@ -1,6 +1,7 @@
 import sys
 import socket
 import threading
+from typing import Tuple
 
 class oNode:
     def __init__(self, bootstrapIp:str, bootstrapPort:int, port:int=8080) -> None:
@@ -13,9 +14,9 @@ class oNode:
 
     
     # Função para lidar com conexões recebidas
-    def handleClient(self, client_socket, address):
+    def handleClient(self, nodeSocket:socket.socket, clientAddress:Tuple[str,int]) -> None:
         # TODO: Change this to handle the connection with the client
-        print(f"[INFO] Conexão recebida de {address}")
+        print(f"[INFO] Conexão recebida de {clientAddress}")
         pass
 
     # Função do servidor para escutar por conexões
