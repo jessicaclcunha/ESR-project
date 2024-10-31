@@ -1,4 +1,5 @@
 import sys
+import json
 import socket
 import threading
 from typing import Tuple
@@ -38,9 +39,11 @@ class oNode:
         Função que popula a lista de vizinhos recebida pelo Bootstrapper.
         """
         self.socket.connect((bsIp, bsPort))
+        self.socket.send(self.ip.encode())  # Enviar o IP para receber a lista de vizinhos
         response = self.socket.recv(4096)
-        print(f"[INFO] Lista de vizinhos recebida: {response.decode()}")
-        self.neighbours = response.decode()
+        neighbours = json.loads(response.decode('utf-8'))
+        print(f"[INFO] Lista de vizinhos recebida: {neighbours}")
+        self.neighbours = neighbours
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:

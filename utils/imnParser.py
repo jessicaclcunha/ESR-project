@@ -1,1 +1,0 @@
-# Fazer parse do ficheiro imn e devolver uma estrutura estilo json, dicionário
