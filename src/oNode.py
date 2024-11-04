@@ -18,6 +18,8 @@ class oNode:
         self.ip = self.socket.getsockname()[0]
         self.port = port
         self.neighbours = []
+        self.otherNeighbourOptions = []  # Em caso de falha dos vizinhos
+        self.routingTable = {} 
 
         self.registerWithBootstrapper(bootstrapIp, bootstrapPort)
 
@@ -31,6 +33,10 @@ class oNode:
         """
         Função responsável por esperar conexões e lidar com os pedidos que o Node recebe.
         """
+        # TODO: Mudar a lógica, aqui criar threads diferentes para as funcionalidades do node
+        # Falar com o cliente se for PoP
+        # Falar com os vizinhos para monitorizar a rede
+        # Falar com os vizinhos para pedir os vídeos por UDP
         self.socket.bind((self.ip, self.port))
         self.socket.listen()
         greenPrint(f"{formattedTime()} [INFO] Node listening in {self.ip}:{self.port}")
@@ -40,22 +46,37 @@ class oNode:
             client_handler = threading.Thread(target=self.handleClient, args=(client_socket, addr,))  # Criar thread para lidar com o cliente
             client_handler.start()
 
+    def neighbourConnectionManagement(self):
+        while True:
+            # Send a Hello Packet to all neighbours every 5 seconds (Maybe do this in another thread only responsible to send, this one just recieves)
+            # Recieve a Packet from all neighbours
+            # Update the values on the routing table (Use locks)
+            # If any node doesn't reply in 15 seconds, remove it from the routing table
+            # Check if i only have 1 neighbour
+            # If yes, send a request for his neighbour
+            # Update self.otherNeighbourOptions list
+            pass
+
     def registerWithBootstrapper(self, bsIp: str, bsPort: int) -> None:
         """
         Função que popula a lista de vizinhos recebida pelo Bootstrapper.
         """
+        greenPrint(f"{formattedTime()} [INFO] Node started")
+        greenPrint(f"{formattedTime()} [INFO] Connecting to Bootstrapper")
         self.socket.connect((bsIp, bsPort))
+        greenPrint(f"{formattedTime()} [INFO] Connected to the Bootstrapper")
         packet = TcpPacket("NLR")  # NLR = Neighbour List Request
         packet.addData(self.ip)
-        self.socket.send(pickle.dumps(packet))  # Enviar o IP para receber a lista de vizinhos
+        self.socket.sendall(pickle.dumps(packet))  # Enviar o IP para receber a lista de vizinhos
+        greenPrint(f"{formattedTime()} [INFO] Requested Neighbour list")
         response = pickle.loads(self.socket.recv(4096))
-        greenPrint(f"{formattedTime()} [INFO] Lista de vizinhos recebida: {response.getData()}")
         self.neighbours = response.getData()
+        greenPrint(f"{formattedTime()} [DATA] Neighbour list: {self.neighbours}")
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
-        redPrint("Usage: python3 oNode.py <bootstrapIp> <bootstrapPort>")
+        redPrint("[ERROR] Usage: python3 oNode.py <bootstrapIp> <bootstrapPort>")
         sys.exit(1)
     bootstrapIp = sys.argv[1]
     bootstrapPort = int(sys.argv[2])

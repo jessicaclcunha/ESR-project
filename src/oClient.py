@@ -19,11 +19,23 @@ class Client:
 
     def startClient(self, bootstrapIp: str, bootstrapPort: int) -> None:
         """
-        Função que inicia o client, comunica com o Bootstrapper e recebe a lista de PoPs.
+        Função que comunica com o Bootstrapper e recebe a lista de PoPs.
         """
         greenPrint(f"{formattedTime()} [INFO] Client started")
         greenPrint(f"{formattedTime()} [INFO] Connecting to Bootstrapper")
-        self.socket.connect((bootstrapIp, bootstrapPort))
+            
+        try:
+            self.socket.connect((bootstrapIp, bootstrapPort))
+        except ConnectionRefusedError:
+            redPrint(f"{formattedTime()} [ERROR] Could not connect to the Bootstrapper")
+            sys.exit(1)
+        except socket.timeout:
+            redPrint(f"{formattedTime()} [ERROR] Timeout while connecting to the Bootstrapper")
+            sys.exit(1)
+        except socket.error as e:
+            redPrint(f"{formattedTime()} [ERROR] {e}")
+            sys.exit(1)
+
         greenPrint(f"{formattedTime()} [INFO] Connected to the Bootstrapper")
         message = TcpPacket("PLR")  # PLR = Pop List Request
         self.socket.sendall(pickle.dumps(message))
@@ -33,14 +45,23 @@ class Client:
         greenPrint(f"{formattedTime()} [DATA] PoP list: {self.pops}")
         self.socket.close()
 
-    def findBestPop(self) -> None:
+    def findBestPoP(self) -> None:
         """
         Função que comunica com os PoPs e escolhe o que tem a menor latência.
         """
         popLatencies = {}
         for pop in self.pops:
             greenPrint(f"{formattedTime()} [INFO] Connecting to {pop}")
-            self.socket.connect((pop, 8080))
+
+            try:
+                self.socket.connect((pop, 8080))
+            except ConnectionRefusedError:
+                redPrint(f"{formattedTime()} [ERROR] Could not connect to {pop}")
+            except socket.timeout:
+                redPrint(f"{formattedTime()} [ERROR] Timeout while connecting to {pop}")
+            except socket.error as e:
+                redPrint(f"{formattedTime()} [ERROR] {e}")
+
             greenPrint(f"{formattedTime()} [INFO] Connected to {pop}")
             message = TcpPacket("LR", time.time())
             self.socket.sendall(pickle.dumps(message))
@@ -48,8 +69,19 @@ class Client:
             greenPrint(f"{formattedTime()} [DATA] Latency to {pop}: {float(packet.data)}")
             popLatencies[pop] = float(packet.data)
 
-        # self.bestPop = min(popLatencies, key=popLatencies.get)
-        # greenPrint(f"{formattedTime()} [DATA] Best Pop: {self.bestPop}")
+        if popLatencies:
+            bestPop = None
+            lowestLatency = float("inf")
+            
+            for pop, latency in popLatencies.items():
+                if latency < lowestLatency:
+                    lowestLatency = latency
+                    bestPop = pop
+
+            self.bestPop = bestPop
+            greenPrint(f"{formattedTime()} [DATA] Best Pop: {self.bestPop}")
+        else:
+            redPrint(f"{formattedTime()} [ERROR] No valid latencies received. Cannot determine best PoP")
 
     def requestVideo(self) -> None:
         """
@@ -65,7 +97,7 @@ class Client:
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        redPrint(f"{formattedTime()} Usage: python3 oClient.py <video> <bootstrapIp> <bootstrapPort>")
+        redPrint(f"{formattedTime()} [ERROR] Usage: python3 oClient.py <video> <bootstrapIp> <bootstrapPort>")
         sys.exit(1)
 
     video = sys.argv[1]
@@ -74,5 +106,5 @@ if __name__ == "__main__":
 
     client = Client(video)
     client.startClient(bootstrapIp, bootstrapPort)
-    client.findBestPop()
+    client.findBestPoP()
     client.requestVideo()
