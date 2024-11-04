@@ -1,9 +1,13 @@
+import os
 import sys
 import time
 import pickle
 import socket
 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from packets.TcpPacket import TcpPacket
+from utils.colors import greenPrint, redPrint
+from utils.time import formattedTime
 
 
 class Client:
@@ -17,13 +21,16 @@ class Client:
         """
         Função que inicia o client, comunica com o Bootstrapper e recebe a lista de PoPs.
         """
-        print("[INFO] Client started")
+        greenPrint(f"{formattedTime()} [INFO] Client started")
+        greenPrint(f"{formattedTime()} [INFO] Connecting to Bootstrapper")
         self.socket.connect((bootstrapIp, bootstrapPort))
+        greenPrint(f"{formattedTime()} [INFO] Connected to the Bootstrapper")
         message = TcpPacket("PLR")  # PLR = Pop List Request
         self.socket.sendall(pickle.dumps(message))
+        greenPrint(f"{formattedTime()} [INFO] Requested PoP list")
         packet = pickle.loads(self.socket.recv(4096))
         self.pops = packet.getData()
-        print(f"[DATA] PoP list: {self.pops}")
+        greenPrint(f"{formattedTime()} [DATA] PoP list: {self.pops}")
         self.socket.close()
 
     def findBestPop(self) -> None:
@@ -32,21 +39,24 @@ class Client:
         """
         popLatencies = {}
         for pop in self.pops:
+            greenPrint(f"{formattedTime()} [INFO] Connecting to {pop}")
             self.socket.connect((pop, 8080))
+            greenPrint(f"{formattedTime()} [INFO] Connected to {pop}")
             message = TcpPacket("LR", time.time())
             self.socket.sendall(pickle.dumps(message))
             packet = pickle.loads(self.socket.recv(4096))
+            greenPrint(f"{formattedTime()} [DATA] Latency to {pop}: {float(packet.data)}")
             popLatencies[pop] = float(packet.data)
 
         # self.bestPop = min(popLatencies, key=popLatencies.get)
-        # print("[DATA] Best Pop: ", self.bestPop)
+        # greenPrint(f"{formattedTime()} [DATA] Best Pop: {self.bestPop}")
 
     def requestVideo(self) -> None:
         """
         Função que realiza o pedido do vídeo ao melhor PoP.
         """
         self.socket.connect((self.bestPop, 8080))
-        print("[INFO] Requesting video")
+        greenPrint(f"{formattedTime()} [INFO] Requesting video to {self.bestPop}")
         packet = TcpPacket("VR")
         packet.addData(self.video)
         self.socket.sendall(pickle.dumps(packet))
@@ -55,7 +65,7 @@ class Client:
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python3 oClient.py <video> <bootstrapIp> <bootstrapPort>")
+        redPrint(f"{formattedTime()} Usage: python3 oClient.py <video> <bootstrapIp> <bootstrapPort>")
         sys.exit(1)
 
     video = sys.argv[1]

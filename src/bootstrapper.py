@@ -6,7 +6,10 @@ import socket
 import threading
 
 from typing import Tuple
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from packets.TcpPacket import TcpPacket
+from utils.colors import greenPrint, redPrint
+from utils.time import formattedTime
 
 
 class Bootstrapper:
@@ -29,8 +32,8 @@ class Bootstrapper:
         self.connections = data["Neighbours"]
         self.pops = data["PoPs"]
 
-        print("[DATA] PoPs: ", self.pops)
-        print("[DATA] Neighbours: ", self.connections)
+        greenPrint(f"{formattedTime()} [DATA] PoPs: {self.pops}")
+        greenPrint(f"{formattedTime()} [DATA] Neighbours: {self.connections}")
 
     def handleNode(
         self, nodeSocket: socket.socket, nodeAddress: Tuple[str, int], nodeMessage: bool
@@ -58,14 +61,14 @@ class Bootstrapper:
         """
         self.socket.bind((self.ip, self.port))
         self.socket.listen()
-        print(f"[INFO] Bootstrapper listening in {self.ip}:{self.port}")
+        greenPrint(f"[INFO] Bootstrapper listening in {self.ip}:{self.port}")
 
         while True:
             nodeSocket, addr = self.socket.accept()
-            print(f"[INFO] Node connected: {nodeSocket}")
+            greenPrint(f"[INFO] Node connected: {nodeSocket}")
             packet = pickle.loads(self.socket.recv(4096))
             messageType = packet.getMessageType()
-            print(f"[INFO] Message received: {messageType}")
+            greenPrint(f"[INFO] Message received: {messageType}")
             nodeHandler = threading.Thread(
                 target=self.handleNode, args=(self, nodeSocket, addr, messageType)
             )
@@ -74,16 +77,14 @@ class Bootstrapper:
 
 if __name__ == "__main__":
     if len(sys.argv) < 4:
-        print(
-            "Usage: python3 bootstrapper.py <bootstrapIp> <bootstrapPort> <bootstrapFilename>"
-        )
+        redPrint("Usage: python3 bootstrapper.py <bootstrapIp> <bootstrapPort> <bootstrapFilename>")
         sys.exit(1)
     bootstrapIp = sys.argv[1]
     bootstrapPort = int(sys.argv[2])
     bootstrapFilename = sys.argv[3]
 
     if not os.path.isfile(f"../topologias/{bootstrapFilename}"):
-        print(f"File {bootstrapFilename} not found")
+        redPrint(f"File {bootstrapFilename} not found")
         sys.exit(1)
 
     bs = Bootstrapper(bootstrapIp, bootstrapPort, bootstrapFilename)

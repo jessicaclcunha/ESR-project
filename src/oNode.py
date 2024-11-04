@@ -1,10 +1,15 @@
+import os
 import sys
+import time
 import pickle
 import socket
 import threading
 
 from typing import Tuple
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from packets.TcpPacket import TcpPacket
+from utils.colors import greenPrint, redPrint
+from utils.time import formattedTime
 
 
 class oNode:
@@ -19,7 +24,7 @@ class oNode:
     # Função para lidar com conexões recebidas
     def handleClient(self, nodeSocket: socket.socket, clientAddress: Tuple[str, int]) -> None:
         # TODO: Change this to handle the connection with the client
-        print(f"[INFO] Connection recieved: {clientAddress}")
+        greenPrint(f"{formattedTime()} [INFO] Connection recieved: {clientAddress}")
 
     # Função do servidor para escutar por conexões
     def startNode(self) -> None:
@@ -28,7 +33,7 @@ class oNode:
         """
         self.socket.bind((self.ip, self.port))
         self.socket.listen()
-        print(f"[INFO] Node listening in {self.ip}:{self.port}")
+        greenPrint(f"{formattedTime()} [INFO] Node listening in {self.ip}:{self.port}")
 
         while True:
             client_socket, addr = (self.socket.accept())  # Aceitar a cenexão de um cliente
@@ -44,13 +49,13 @@ class oNode:
         packet.addData(self.ip)
         self.socket.send(pickle.dumps(packet))  # Enviar o IP para receber a lista de vizinhos
         response = pickle.loads(self.socket.recv(4096))
-        print(f"[INFO] Lista de vizinhos recebida: {response.getData()}")
+        greenPrint(f"{formattedTime()} [INFO] Lista de vizinhos recebida: {response.getData()}")
         self.neighbours = response.getData()
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
-        print("Usage: python3 oNode.py <bootstrapIp> <bootstrapPort>")
+        redPrint("Usage: python3 oNode.py <bootstrapIp> <bootstrapPort>")
         sys.exit(1)
     bootstrapIp = sys.argv[1]
     bootstrapPort = int(sys.argv[2])
