@@ -6,7 +6,7 @@ class RtpPacket:
 	header = bytearray(HEADER_SIZE)
 	
 	def __init__(self):
-		pass,
+		pass
 		
 	def encode(self, version, padding, extension, cc, seqnum, marker, pt, ssrc, payload):
 		"""Encode the RTP packet with header fields and payload."""

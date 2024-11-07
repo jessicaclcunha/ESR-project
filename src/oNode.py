@@ -41,6 +41,11 @@ class oNode:
         self.socket.listen()
         greenPrint(f"{formattedTime()} [INFO] Node listening in {self.ip}:{self.port}")
 
+        # TODO: Criar threads diferentes para cada serviço dos nós, atribuir portas diferentes a cada (meter as portas num .env por exemplo)
+        # clientHandler = threading.Thread(target=self.handleClient, args=(addr)) # Change the handleClient to only recieve the address and do the connection itself
+        # neighbourConnectionManagement = threading.Thread(target=self.neighbourConnectionManagement) # Vê a lista de vizinhos e manda/recebe pacotes de controlo da ligação
+        # neighbourRequests = threading.Thread(target=self.handleNeighbourRequest) # Recebe e faz pedidos relativos aos vídeos UDP
+
         while True:
             client_socket, addr = (self.socket.accept())  # Aceitar a cenexão de um cliente
             client_handler = threading.Thread(target=self.handleClient, args=(client_socket, addr,))  # Criar thread para lidar com o cliente

@@ -199,7 +199,7 @@ class Client:
 		# Send the RTSP request using rtspSocket.
 		# ...
 		
-		print('\nData sent:\n' + request)
+		print('\nData sent:\n' + requestCode)
 	
 	def recvRtspReply(self):
 		"""Receive RTSP reply from the server."""
