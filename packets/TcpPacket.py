@@ -1,10 +1,11 @@
 # MESSAGE TYPES
 # "R" (Response)
 # "VR"(Video Request)
+# "SVR" (Stop Video Request)
 # "LR"(Latency Request)
 # "PLR" (Pop List Request)
 # "NLR" (Neighbours List Request)
-#
+# "HP" (Hello Packet)
 
 import time
 
@@ -13,7 +14,7 @@ class TcpPacket:
     def __init__(self, messageType: str, timestamp: float = time.time()) -> None:
         self.messageType = messageType
         self.timestamp = timestamp
-        self.data = None
+        self.data = {}
 
     def getMessageType(self) -> str:
         """
@@ -27,13 +28,13 @@ class TcpPacket:
         """
         return self.timestamp
 
-    def getData(self):
+    def getData(self) -> dict:
         """
         Returns the data of the packet.
         """
         return self.data
 
-    def addData(self, data) -> None:
+    def addData(self, data:dict) -> None:
         """
         Adds data to the packet. No specific type is assigned.
         """

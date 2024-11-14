@@ -1,5 +1,7 @@
 import socket
 
+import bootstrapper as bs
+
 class Servidor:
 
     def __init__(self) -> None:
