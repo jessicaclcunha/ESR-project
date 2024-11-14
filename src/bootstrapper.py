@@ -19,7 +19,7 @@ class Bootstrapper:
         self.nodes = {}
         self.pops = []
 
-        self.fillConections(filename)
+        self.fillConnections(filename)
 
     def fillConnections(self, filename: str) -> None:
         """
@@ -47,17 +47,17 @@ class Bootstrapper:
         Função que envia a lista de vizinhos a cada Node.
         """
         nodeIP = nodeAddress[0] # TODO: Verificar se o IP se obtém assim, a message contém o IP
+        data = {}
+
         if nodeMessage == "PLR":  # PLR = Pop List Request
-            data = self.pops
+            data = { "PoPs" : self.pops }
         elif nodeMessage == "NLR":  # NLR = Neighbours List Request
             for key,info in self.nodes.items():
                 if nodeIP in key.split('|'):
                     data = info
                     nodeIP = info['IP']
-            # Retorna um dict { "IP": ipPredefinido, "Neighbours": [IpNeighbours]}
             data['isPoP'] = nodeIP in self.pops
-        else:
-            data = None
+            # Retorna um dict { "IP": ipPredefinido, "Neighbours": [IpNeighbours], "isPoP": Bool}
 
         response = TcpPacket("R")
         response.addData(data)
@@ -103,7 +103,7 @@ if __name__ == "__main__":
         sys.exit(1)
     
     bootstrapIp = sys.argv[1]
-    bootstrapPort = sys.argv[2]
+    bootstrapPort = int(sys.argv[2])
     bootstrapFilename = sys.argv[3]
 
     if not os.path.isfile(f"../topologias/{bootstrapFilename}"):

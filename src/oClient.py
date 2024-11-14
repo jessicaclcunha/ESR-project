@@ -41,7 +41,8 @@ class Client:
         self.socket.sendall(pickle.dumps(message))
         greenPrint(f"{formattedTime()} [INFO] Requested PoP list")
         packet = pickle.loads(self.socket.recv(4096))
-        self.pops = packet.getData()
+        packetData = packet.getData()
+        self.pops = packetData["PoPs"] or []
         greenPrint(f"{formattedTime()} [DATA] PoP list: {self.pops}")
         self.socket.close()
 
@@ -90,7 +91,8 @@ class Client:
         self.socket.connect((self.bestPop, 8080))
         greenPrint(f"{formattedTime()} [INFO] Requesting video to {self.bestPop}")
         packet = TcpPacket("VR")
-        packet.addData(self.video)
+        data = { "video" : self.video }
+        packet.addData(data)
         self.socket.sendall(pickle.dumps(packet))
         # TODO: Process of recieving and displaying the video
 

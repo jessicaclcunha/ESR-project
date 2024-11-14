@@ -61,6 +61,7 @@ class oNode:
         """
         Função responsável por enviar Hello Packets aos vizinhos de 5 em 5 segundos.
         """
+        greenPrint(f"{formattedTime()} [INFO] Ping Thread started on port {ports.NODE_PING_PORT}")
         ssocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         ssocket.bind((self.ip,ports.NODE_PING_PORT))
         while True:
@@ -75,16 +76,25 @@ class oNode:
         """
         Função responsável por receber os Hello Packets dos vizinhos.
         """
+        greenPrint(f"{formattedTime()} [INFO] Neighbour monitoring thread started on port {ports.NODE_MONITORING_PORT}")
         lsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         lsocket.bind((self.ip, ports.NODE_MONITORING_PORT))
+        lsocket.listen()
+
         while True:
-            # Recieve a Packet from all neighbours
+            neighbourSocket, addr = lsocket.accept()
+
+            packet = pickle.loads(lsocket.recv(4096))
+            messageType = packet.getMessageType()
+
+            if messageType == "HP":
+                greenPrint(f"{formattedTime()} [INFO] Hello Packet received from {addr}")
+                neighbourSocket.close()
             # Update the values on the routing table (Use locks)
             # If any node doesn't reply in 15 seconds, remove it from the routing table
             # Check if i only have 1 neighbour
             # If yes, send a request for his neighbour
             # Update self.otherNeighbourOptions list
-            pass
     
     def nodeRequestManager(self):
         """
@@ -94,12 +104,12 @@ class oNode:
         lsocket.bind((self.ip, ports.NODE_REQUEST_PORT))
 
         # TODO:
-        # VR
+        # Message Type
+        # -- VR (Video Request)
         # Receber um video request
         # Verificar se estamos a fazer ou não stream do vídeo
         # Se sim, encaminhar, se não, pedir ao nosso melhor vizinho o vídeo
-
-        # SVR (Stop Video Request)
+        # -- SVR (Stop Video Request)
         # Verificar se é só para esse node que estou a enviar o vídeo
         # Se sim, enviar mensagem ao meu melhor node a dizer que não preciso do video e atualizar a tabela de videos
         # Se não, só deixar de enviar para ele
