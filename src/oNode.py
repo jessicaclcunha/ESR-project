@@ -88,13 +88,29 @@ class oNode:
             messageType = packet.getMessageType()
 
             if messageType == "HP":
-                greenPrint(f"{formattedTime()} [INFO] Hello Packet received from {addr}")
-                neighbourSocket.close()
+                greenPrint(f"{formattedTime()} [INFO] Hello Packet received from {addr[0]}")
+                self.routingTable[addr[0]] = time.time() # Atualizar tempo do vizinho??
             # Update the values on the routing table (Use locks)
             # If any node doesn't reply in 15 seconds, remove it from the routing table
             # Check if i only have 1 neighbour
             # If yes, send a request for his neighbour
             # Update self.otherNeighbourOptions list
+            
+######################
+            else:
+                redPrint(f"{formattedTime()} [ERROR] Unknown message type from {addr[0]}")
+
+            # Remover vizinhos inativos
+            current_time = time.time()
+            inactive_neighbors = [
+                ip for ip, last_seen in self.routingTable.items() if current_time - last_seen > 15
+            ]
+            for ip in inactive_neighbors:
+                redPrint(f"{formattedTime()} [WARN] Neighbor {ip} removed due to timeout")
+                self.routingTable.pop(ip, None)
+                self.neighbours.remove(ip)
+                self.reconnectNeighbors()
+######################
     
     def nodeRequestManager(self):
         """
@@ -113,6 +129,34 @@ class oNode:
         # Verificar se é só para esse node que estou a enviar o vídeo
         # Se sim, enviar mensagem ao meu melhor node a dizer que não preciso do video e atualizar a tabela de videos
         # Se não, só deixar de enviar para ele
+
+######################
+        while True:
+            data, addr = lsocket.recvfrom(4096)
+            packet = pickle.loads(data)
+            messageType = packet.getMessageType()
+
+            if messageType == "VR":  # Video Request
+                video_id = packet.getData()['video_id']
+                if video_id in self.streamedVideos:
+                    greenPrint(f"{formattedTime()} [INFO] Forwarding video {video_id} to {addr[0]}")
+                    # Encaminha para o vizinho
+                    best_neighbour = self.getBestNeighbour()
+                    if best_neighbour:
+                        self.forwardVideoRequest(video_id, best_neighbour)
+                else:
+                    greenPrint(f"{formattedTime()} [INFO] Requesting video {video_id} from best neighbour")
+                    # Pede ao vizinho
+                    best_neighbour = self.getBestNeighbour()
+                    if best_neighbour:
+                        self.requestVideoFromNeighbour(video_id, best_neighbour)
+
+            elif messageType == "SVR":  # Stop Video Request
+                video_id = packet.getData()['video_id']
+                # Verifica se precisa parar o envio
+                self.stopStreamingVideo(video_id, addr[0])
+
+######################
 
     def registerWithBootstrapper(self, bsIp: str, bsPort: int) -> None:
         """

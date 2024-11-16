@@ -96,6 +96,26 @@ class Client:
         self.socket.sendall(pickle.dumps(packet))
         # TODO: Process of recieving and displaying the video
 
+######################
+
+        while True:
+            data = self.socket.recv(4096)
+            if not data:
+                break
+            video_packet = pickle.loads(data)
+            self.displayVideo(video_packet)
+           
+            
+    def displayVideo(self, video_packet: TcpPacket) -> None:
+        """
+        Função que recebe e exibe o vídeo em chunks simulados.
+        """
+        video_chunk = video_packet.getData().get('chunk', 'No data')
+        #imprime 10 primeiros caracteres do chunk
+        greenPrint(f"{formattedTime()} [INFO] Received video chunk: {video_chunk[:10]}...")
+
+######################
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
