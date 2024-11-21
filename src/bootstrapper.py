@@ -46,24 +46,29 @@ class Bootstrapper:
         """
         Função que envia a lista de vizinhos a cada Node.
         """
-        nodeIP = nodeAddress[0] # TODO: Verificar se o IP se obtém assim, a message contém o IP
-        data = {}
+        
+        try:
+            nodeIP = nodeAddress[0] # TODO: Verificar se o IP se obtém assim, a message contém o IP
+            data = {}
 
-        if nodeMessage == "PLR":  # PLR = Pop List Request
-            data = { "PoPs" : self.pops }
-        elif nodeMessage == "NLR":  # NLR = Neighbours List Request
-            for key,info in self.nodes.items():
-                if nodeIP in key.split('|'):
-                    data = info
-                    nodeIP = info['IP']
-            data['isPoP'] = nodeIP in self.pops
-            # Retorna um dict { "IP": ipPredefinido, "Neighbours": [IpNeighbours], "isPoP": Bool}
+            if nodeMessage == "PLR":  # PLR = Pop List Request
+                data = { "PoPs" : self.pops }
+            elif nodeMessage == "NLR":  # NLR = Neighbours List Request
+                for key,info in self.nodes.items():
+                    if nodeIP in key.split('|'):
+                        data = info
+                        nodeIP = info['IP']
+                data['isPoP'] = nodeIP in self.pops
+                # Retorna um dict { "IP": ipPredefinido, "Neighbours": [IpNeighbours], "isPoP": Bool}
 
-        response = TcpPacket("R")
-        response.addData(data)
+            response = TcpPacket("R")
+            response.addData(data)
 
-        nodeSocket.send(pickle.dumps(response))
-        nodeSocket.close()
+            nodeSocket.send(pickle.dumps(response))
+        except Exception as e:
+            redPrint(f"[ERROR] Failed to handle node {nodeAddress}: {e}")
+        finally:
+            nodeSocket.close()
 
     def startBootstrapper(self) -> None:
         """

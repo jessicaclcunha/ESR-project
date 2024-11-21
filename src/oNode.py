@@ -22,6 +22,7 @@ class oNode:
         self.otherNeighbourOptions = []  # Em caso de falha dos vizinhos
         self.routingTable = {} # "IP": Time
         self.isPoP = False
+        self.lock = threading.Lock()
 
         self.registerWithBootstrapper(bootstrapIp, bootstrapPort)
 
@@ -38,6 +39,7 @@ class oNode:
        """
        lsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
        lsocket.bind((self.ip, ports.NODE_CLIENT_LISTENING_PORT))
+       lsocket.listen()
        while True:
             client_socket, addr = (self.socket.accept())  # Aceitar a cenexão de um cliente
             client_handler = threading.Thread(target=self.handleClient, args=(client_socket, addr,))  # Criar thread para lidar com o cliente
@@ -52,23 +54,25 @@ class oNode:
         # Falar com os vizinhos para pedir os vídeos por UDP
 
         if self.isPoP:
-            threading.Thread(target=self.clientConnectionManager)
-        threading.Thread(target=self.neighbourConnectionManagement)
-        threading.Thread(target=self.neighbourPingSender)
-        threading.Thread(target=self.nodeRequestManager)
+            threading.Thread(target=self.clientConnectionManager).start()
+        threading.Thread(target=self.neighbourConnectionManagement).start()
+        threading.Thread(target=self.neighbourPingSender).start()
+        threading.Thread(target=self.nodeRequestManager).start()
     
     def neighbourPingSender(self):
         """
         Função responsável por enviar Hello Packets aos vizinhos de 5 em 5 segundos.
         """
         greenPrint(f"{formattedTime()} [INFO] Ping Thread started on port {ports.NODE_PING_PORT}")
-        ssocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        ssocket.bind((self.ip,ports.NODE_PING_PORT))
         while True:
             for neighbourIP in self.neighbours:
-                helloPacket =TcpPacket("HP")
-                ssocket.connect((neighbourIP, ports.NODE_MONITORING_PORT))
-                ssocket.send(pickle.dumps(helloPacket))
+                try:
+                    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ssocket:
+                        ssocket.connect((neighbourIP, ports.NODE_MONITORING_PORT))
+                        helloPacket = TcpPacket("HP")
+                        ssocket.send(pickle.dumps(helloPacket))
+                except Exception as e:
+                    redPrint(f"[ERROR] Failed to send Hello Packet to {neighbourIP}: {e}")
             time.sleep(5)
 
         
@@ -82,34 +86,105 @@ class oNode:
         lsocket.listen()
 
         while True:
-            neighbourSocket, addr = lsocket.accept()
+            try:
+                neighbourSocket, addr = lsocket.accept()
 
-            packet = pickle.loads(lsocket.recv(4096))
-            messageType = packet.getMessageType()
+                packet = pickle.loads(lsocket.recv(4096))
+                messageType = packet.getMessageType()
 
-            if messageType == "HP":
-                greenPrint(f"{formattedTime()} [INFO] Hello Packet received from {addr[0]}")
-                self.routingTable[addr[0]] = time.time() # Atualizar tempo do vizinho??
-            # Update the values on the routing table (Use locks)
-            # If any node doesn't reply in 15 seconds, remove it from the routing table
-            # Check if i only have 1 neighbour
-            # If yes, send a request for his neighbour
-            # Update self.otherNeighbourOptions list
+                if messageType == "HP":
+                    greenPrint(f"{formattedTime()} [INFO] Hello Packet received from {addr[0]}")
+                    with self.lock:
+                        self.routingTable[addr[0]] = time.time() # Atualizar tempo do vizinho??
+                # Update the values on the routing table (Use locks)
+                # If any node doesn't reply in 15 seconds, remove it from the routing table
+                # Check if i only have 1 neighbour
+                # If yes, send a request for his neighbour
+                # Update self.otherNeighbourOptions list
+                
+    ######################
+                current_time = time.time()
+                with self.lock:
+                    inactive_neighbors = [
+                        ip for ip, last_seen in self.routingTable.items()
+                        if current_time - last_seen > 15
+                    ]
+                    for ip in inactive_neighbors:
+                        redPrint(f"[WARN] Neighbor {ip} removed due to timeout")
+                        self.routingTable.pop(ip, None)
+                        self.neighbours.remove(ip)
+                        
+                with self.lock:
+                    if len(self.neighbours) == 1:
+                        lone_neighbour = self.neighbours[0]
+                        self.requestAdditionalNeighbours(lone_neighbour)
+
+            except Exception as e:
+                redPrint(f"[ERROR] Error in neighbour monitoring: {e}")
+                
+                
+    def requestAdditionalNeighbours(self, neighbourIP: str):
+        """
+        Solicita vizinhos adicionais ao único vizinho disponível.
+        """
+        try:
+            ssocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            ssocket.connect((neighbourIP, ports.NODE_REQUEST_PORT))
+            requestPacket = TcpPacket("NLR")  # NLR = Neighbour List Request
+            ssocket.send(pickle.dumps(requestPacket))
+
+            response = pickle.loads(ssocket.recv(4096))
+            new_neighbours = response.getData().get("Neighbours", [])
+
+            with self.lock:
+                # Atualiza a lista de opções de vizinhos, excluindo o vizinho atual
+                self.otherNeighbourOptions = [
+                    ip for ip in new_neighbours if ip != self.ip and ip not in self.neighbours
+                ]
+                greenPrint(f"{formattedTime()} [INFO] Updated otherNeighbourOptions: {self.otherNeighbourOptions}")
+
+        except Exception as e:
+            redPrint(f"[ERROR] Failed to request additional neighbours from {neighbourIP}: {e}")
+        finally:
+            ssocket.close()
             
-######################
-            else:
-                redPrint(f"{formattedTime()} [ERROR] Unknown message type from {addr[0]}")
+    
+    def forwardVideoRequest(self, video_id, neighbourIP):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ssocket:
+                ssocket.connect((neighbourIP, ports.NODE_REQUEST_PORT))
+                videoRequestPacket = TcpPacket("VR")
+                videoRequestPacket.addData({"video_id": video_id})
+                ssocket.send(pickle.dumps(videoRequestPacket))
+                greenPrint(f"{formattedTime()} [INFO] Forwarded video request {video_id} to {neighbourIP}")
+        except Exception as e:
+            redPrint(f"[ERROR] Failed to forward video request to {neighbourIP}: {e}")
+            
+    
+    def requestVideoFromNeighbour(self, video_id, neighbourIP):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ssocket:
+                ssocket.connect((neighbourIP, ports.NODE_REQUEST_PORT))
+                videoRequestPacket = TcpPacket("VR")
+                videoRequestPacket.addData({"video_id": video_id})
+                ssocket.send(pickle.dumps(videoRequestPacket))
+                greenPrint(f"{formattedTime()} [INFO] Requested video {video_id} from {neighbourIP}")
+        except Exception as e:
+            redPrint(f"[ERROR] Failed to request video {video_id} from {neighbourIP}: {e}")
+            
+    
+    def stopStreamingVideo(self, video_id, neighbourIP):
+        try:
+            with self.lock:
+                if video_id in self.streamedVideos:
+                    self.streamedVideos.remove(video_id)
+            greenPrint(f"{formattedTime()} [INFO] Stopped streaming video {video_id} to {neighbourIP}")
+        except Exception as e:
+            redPrint(f"[ERROR] Failed to stop streaming video {video_id}: {e}")
 
-            # Remover vizinhos inativos
-            current_time = time.time()
-            inactive_neighbors = [
-                ip for ip, last_seen in self.routingTable.items() if current_time - last_seen > 15
-            ]
-            for ip in inactive_neighbors:
-                redPrint(f"{formattedTime()} [WARN] Neighbor {ip} removed due to timeout")
-                self.routingTable.pop(ip, None)
-                self.neighbours.remove(ip)
-                self.reconnectNeighbors()
+
+
+
 ######################
     
     def nodeRequestManager(self):
@@ -162,20 +237,27 @@ class oNode:
         """
         Função que popula a lista de vizinhos recebida pelo Bootstrapper.
         """
-        greenPrint(f"{formattedTime()} [INFO] Node started")
-        greenPrint(f"{formattedTime()} [INFO] Connecting to Bootstrapper")
-        self.socket.connect((bsIp, bsPort))
-        greenPrint(f"{formattedTime()} [INFO] Connected to the Bootstrapper")
-        packet = TcpPacket("NLR")  # NLR = Neighbour List Request
-        packet.addData(self.ip) # Ver se é necessário
-        self.socket.sendall(pickle.dumps(packet))  # Enviar o IP para receber a lista de vizinhos
-        greenPrint(f"{formattedTime()} [INFO] Requested Neighbour list")
-        response = pickle.loads(self.socket.recv(4096))
-        responseDict = response.getData()
-        self.ip = responseDict['IP']
-        self.neighbours = responseDict['Neighbours']
-        self.isPoP = responseDict['isPoP']
-        greenPrint(f"{formattedTime()} [DATA] Neighbour list: {self.neighbours}")
+        try:
+            greenPrint(f"{formattedTime()} [INFO] Node started")
+            greenPrint(f"{formattedTime()} [INFO] Connecting to Bootstrapper")
+            self.socket.connect((bsIp, bsPort))
+            greenPrint(f"{formattedTime()} [INFO] Connected to the Bootstrapper")
+
+            packet = TcpPacket("NLR") # NLR = Neighbour List Request
+            packet.addData(self.ip) # Ver se é necessário
+            self.socket.sendall(pickle.dumps(packet))   # Enviar o IP para receber a lista de vizinhos
+
+            greenPrint(f"{formattedTime()} [INFO] Requested Neighbour list")
+            response = pickle.loads(self.socket.recv(4096))
+
+            responseDict = response.getData()
+            self.ip = responseDict['IP']
+            self.neighbours = responseDict['Neighbours']
+            self.isPoP = responseDict['isPoP']
+            greenPrint(f"{formattedTime()} [DATA] Neighbour list: {self.neighbours}")
+        except Exception as e:
+            redPrint(f"[ERROR] Failed to register with Bootstrapper: {e}")
+            sys.exit(1)
 
 
 if __name__ == "__main__":
