@@ -6,6 +6,7 @@
 # "PLR" (Pop List Request)
 # "NLR" (Neighbours List Request)
 # "HP" (Hello Packet)
+# "BNR" (Best Neighbour Request)
 
 import time
 
