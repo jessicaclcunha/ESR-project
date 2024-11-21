@@ -19,10 +19,16 @@ class oNode:
         self.ip = self.socket.getsockname()[0]
         self.port = port
         self.neighbours = []
-        self.otherNeighbourOptions = []  # Em caso de falha dos vizinhos
+        self.neighboursLock = threading.Lock()
+        self.otherNeighbourOption = None # Em caso de falha dos vizinhos
+        self.otherNeighbourLock = threading.Lock()
         self.routingTable = {} # "IP": Time
+        self.routingTableLock = threading.Lock()
         self.isPoP = False
-        self.lock = threading.Lock()
+        self.streamedVideos = {} # "IP" : {"Streaming": True/False, "Neighbours": []}
+        self.streamedVideosLock = threading.Lock()
+        self.bestNeighbour = None
+        self.bestNeighbourLock = threading.Lock()
 
         self.registerWithBootstrapper(bootstrapIp, bootstrapPort)
 
@@ -58,6 +64,7 @@ class oNode:
         threading.Thread(target=self.neighbourConnectionManagement).start()
         threading.Thread(target=self.neighbourPingSender).start()
         threading.Thread(target=self.nodeRequestManager).start()
+        # TODO: Thread para remover vizinhos inativos
     
     def neighbourPingSender(self):
         """
@@ -87,14 +94,14 @@ class oNode:
 
         while True:
             try:
-                neighbourSocket, addr = lsocket.accept()
+                _ , addr = lsocket.accept()
 
                 packet = pickle.loads(lsocket.recv(4096))
                 messageType = packet.getMessageType()
 
                 if messageType == "HP":
                     greenPrint(f"{formattedTime()} [INFO] Hello Packet received from {addr[0]}")
-                    with self.lock:
+                    with self.routingTableLock:
                         self.routingTable[addr[0]] = time.time() # Atualizar tempo do vizinho??
                 # Update the values on the routing table (Use locks)
                 # If any node doesn't reply in 15 seconds, remove it from the routing table
@@ -102,51 +109,53 @@ class oNode:
                 # If yes, send a request for his neighbour
                 # Update self.otherNeighbourOptions list
                 
-    ######################
+                ######################   FIX: Mudar para outra função
                 current_time = time.time()
-                with self.lock:
+                with self.routingTableLock:
                     inactive_neighbors = [
-                        ip for ip, last_seen in self.routingTable.items()
-                        if current_time - last_seen > 15
+                        ip for ip, last_seen in self.routingTable.items() 
+                        if current_time - last_seen > 15 # FIX: Mudar para uma função no module utils.time e fazer 15 ser uma variável TIMEOUT
                     ]
                     for ip in inactive_neighbors:
                         redPrint(f"[WARN] Neighbor {ip} removed due to timeout")
                         self.routingTable.pop(ip, None)
-                        self.neighbours.remove(ip)
+                        if ip in self.neighbours:
+                            self.neighbours.remove(ip)
                         
-                with self.lock:
-                    if len(self.neighbours) == 1:
-                        lone_neighbour = self.neighbours[0]
-                        self.requestAdditionalNeighbours(lone_neighbour)
+                with self.neighboursLock:
+                    size = len(self.neighbours) 
+                if size == 1:
+                    self.requestAdditionalNeighbours()
 
             except Exception as e:
                 redPrint(f"[ERROR] Error in neighbour monitoring: {e}")
                 
                 
-    def requestAdditionalNeighbours(self, neighbourIP: str):
+    def requestAdditionalNeighbours(self):
         """
         Solicita vizinhos adicionais ao único vizinho disponível.
         """
+        neighbourIP = self.neighbours[0]
+        ssocket = None
         try:
             ssocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             ssocket.connect((neighbourIP, ports.NODE_REQUEST_PORT))
-            requestPacket = TcpPacket("NLR")  # NLR = Neighbour List Request
+            requestPacket = TcpPacket("NLR")  # NLR = Neighbour List Request # FIX: Mudar o tipo de pacote, NLR é só para o Bootstrapper e pedir só o bestNeighbour dele
             ssocket.send(pickle.dumps(requestPacket))
 
             response = pickle.loads(ssocket.recv(4096))
-            new_neighbours = response.getData().get("Neighbours", [])
+            newNeighbour = response.getData().get("Neighbour", "")
 
-            with self.lock:
+            with self.otherNeighbourLock:
                 # Atualiza a lista de opções de vizinhos, excluindo o vizinho atual
-                self.otherNeighbourOptions = [
-                    ip for ip in new_neighbours if ip != self.ip and ip not in self.neighbours
-                ]
-                greenPrint(f"{formattedTime()} [INFO] Updated otherNeighbourOptions: {self.otherNeighbourOptions}")
+                self.otherNeighbourOption = newNeighbour
+            greenPrint(f"{formattedTime()} [INFO] Updated otherNeighbourOption: {self.otherNeighbourOption}")
 
         except Exception as e:
             redPrint(f"[ERROR] Failed to request additional neighbours from {neighbourIP}: {e}")
         finally:
-            ssocket.close()
+            if ssocket:
+                ssocket.close()
             
     
     def forwardVideoRequest(self, video_id, neighbourIP):
@@ -175,15 +184,17 @@ class oNode:
     
     def stopStreamingVideo(self, video_id, neighbourIP):
         try:
-            with self.lock:
-                if video_id in self.streamedVideos:
-                    self.streamedVideos.remove(video_id)
+            with self.streamedVideosLock:
+                if video_id in self.streamedVideos.keys():
+                    nv = self.streamedVideos["NofNeighbours"]
+                    if nv == 1:
+                        self.streamedVideos[video_id]["Streaming"] = False
+                        # TODO: Ask my neighbour to stop sending the video
+                    else:
+                        self.streamedVideos["NofNeighbours"] -= 1
             greenPrint(f"{formattedTime()} [INFO] Stopped streaming video {video_id} to {neighbourIP}")
         except Exception as e:
             redPrint(f"[ERROR] Failed to stop streaming video {video_id}: {e}")
-
-
-
 
 ######################
     
@@ -215,20 +226,21 @@ class oNode:
                 video_id = packet.getData()['video_id']
                 if video_id in self.streamedVideos:
                     greenPrint(f"{formattedTime()} [INFO] Forwarding video {video_id} to {addr[0]}")
-                    # Encaminha para o vizinho
-                    best_neighbour = self.getBestNeighbour()
+                    # TODO: Pedir o bestNeighbour dentro da função provavelmente
+                    with self.bestNeighbourLock:
+                        best_neighbour = self.bestNeighbour
                     if best_neighbour:
                         self.forwardVideoRequest(video_id, best_neighbour)
                 else:
                     greenPrint(f"{formattedTime()} [INFO] Requesting video {video_id} from best neighbour")
-                    # Pede ao vizinho
-                    best_neighbour = self.getBestNeighbour()
+                    # TODO: Pedir o bestNeighbour dentro da função provavelmente
+                    with self.bestNeighbourLock:
+                        best_neighbour = self.bestNeighbour
                     if best_neighbour:
                         self.requestVideoFromNeighbour(video_id, best_neighbour)
 
             elif messageType == "SVR":  # Stop Video Request
                 video_id = packet.getData()['video_id']
-                # Verifica se precisa parar o envio
                 self.stopStreamingVideo(video_id, addr[0])
 
 ######################
