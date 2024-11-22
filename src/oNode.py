@@ -9,7 +9,7 @@ from typing import Tuple
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from packets.TcpPacket import TcpPacket
 from utils.colors import greenPrint, redPrint
-from utils.time import formattedTime
+from utils.time import formattedTime, nodePastTimeout
 import utils.ports as ports
 
 
@@ -22,6 +22,8 @@ class oNode:
         self.neighboursLock = threading.Lock()
         self.otherNeighbourOption = None # Em caso de falha dos vizinhos
         self.otherNeighbourLock = threading.Lock()
+        self.requestedOtherNeighbour = False
+        self.requestedOtherNeighbourLock = threading.Lock()
         self.routingTable = {} # "IP": Time
         self.routingTableLock = threading.Lock()
         self.isPoP = False
@@ -64,11 +66,11 @@ class oNode:
         threading.Thread(target=self.neighbourConnectionManagement).start()
         threading.Thread(target=self.neighbourPingSender).start()
         threading.Thread(target=self.nodeRequestManager).start()
-        # TODO: Thread para remover vizinhos inativos
+        threading.Thread(target=self.routingTableMonitoring).start()
     
     def neighbourPingSender(self):
         """
-        Função responsável por enviar Hello Packets aos vizinhos de 5 em 5 segundos.
+        Função responsável por enviar Hello Packets aos vizinhos de 3 em 3 segundos.
         """
         greenPrint(f"{formattedTime()} [INFO] Ping Thread started on port {ports.NODE_PING_PORT}")
         while True:
@@ -82,7 +84,7 @@ class oNode:
                         ssocket.send(pickle.dumps(helloPacket))
                 except Exception as e:
                     redPrint(f"[ERROR] Failed to send Hello Packet to {neighbourIP}: {e}")
-            time.sleep(5)
+            time.sleep(3)
 
         
     def neighbourConnectionManagement(self):
@@ -104,35 +106,40 @@ class oNode:
 
                 if messageType == "HP":
                     greenPrint(f"{formattedTime()} [INFO] Hello Packet received from {addr[0]}")
-                    with self.routingTableLock:
+                    with self.routingTableLock:  # TODO: Verificar se o vizinho está na routing table e na lista de vizinhos
                         self.routingTable[addr[0]] = time.time() # Atualizar tempo do vizinho??
-                # Update the values on the routing table (Use locks)
-                # If any node doesn't reply in 15 seconds, remove it from the routing table
-                # Check if i only have 1 neighbour
-                # If yes, send a request for his neighbour
-                # Update self.otherNeighbourOptions list
-                
-                ######################   FIX: Mudar para outra função
-                current_time = time.time()
-                with self.routingTableLock:
-                    inactive_neighbors = [
-                        ip for ip, last_seen in self.routingTable.items() 
-                        if current_time - last_seen > 15 # FIX: Mudar para uma função no module utils.time e fazer 15 ser uma variável TIMEOUT
-                    ]
-                    for ip in inactive_neighbors:
-                        redPrint(f"[WARN] Neighbor {ip} removed due to timeout")
-                        self.routingTable.pop(ip, None)
-                        with self.neighboursLock:
-                            if ip in self.neighbours:
-                                self.neighbours.remove(ip)
-                        
-                with self.neighboursLock:
-                    size = len(self.neighbours) 
-                if size == 1:
-                    self.requestAdditionalNeighbours()
 
             except Exception as e:
                 redPrint(f"[ERROR] Error in neighbour monitoring: {e}")
+
+    def routingTableMonitoring(self):
+        while True:
+            time.sleep(3)
+            startThread = False
+            onlyOneNeighbour = False
+
+            with self.routingTableLock:
+                neighboursToRemove = []
+                for ip, last_seen in self.routingTable.items():
+                    if nodePastTimeout(last_seen):
+                        neighboursToRemove.append(ip)
+
+                for ip in neighboursToRemove:
+                    redPrint(f"[WARN] Neighbor {ip} removed due to timeout")
+                    self.routingTable.pop(ip, None)
+                    with self.neighboursLock:
+                        if ip in self.neighbours:
+                            self.neighbours.remove(ip)
+                        if len(self.neighbours) == 1:
+                            onlyOneNeighbour = True
+
+            with self.requestedOtherNeighbourLock:
+                if onlyOneNeighbour and not self.requestedOtherNeighbour:
+                    self.requestedOtherNeighbour = True
+                    startThread = True
+
+            if startThread:
+                threading.Thread(target=self.requestAdditionalNeighbours).start()
                 
                 
     def requestAdditionalNeighbours(self):
@@ -145,6 +152,8 @@ class oNode:
         try:
             ssocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             ssocket.connect((neighbourIP, ports.NODE_REQUEST_PORT))
+
+            # TODO: While true cycle to keep requesting and updating the best neighbour until it is no longer lonely or etc
             requestPacket = TcpPacket("BNR") # Best Neighbour Request
             ssocket.send(pickle.dumps(requestPacket))
 
