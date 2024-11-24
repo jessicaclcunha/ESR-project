@@ -96,18 +96,16 @@ class Bootstrapper:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 4:
+    if len(sys.argv) < 2:
         redPrint(
-            "[ERROR] Usage: python3 bootstrapper.py <bootstrapIP> <bootstrapPort> <bootstrapFilename>")
+            "[ERROR] Usage: python3 bootstrapper.py <bootstrapFilename>")
         sys.exit(1)
     
-    bootstrapIp = sys.argv[1]
-    bootstrapPort = int(sys.argv[2])
-    bootstrapFilename = sys.argv[3]
+    bootstrapFilename = sys.argv[1]
 
     if not os.path.isfile(f"../topologias/{bootstrapFilename}"):
         redPrint(f"[ERROR] File {bootstrapFilename} not found")
         sys.exit(1)
 
-    bs = Bootstrapper(bootstrapIp, bootstrapPort, bootstrapFilename)
+    bs = Bootstrapper(bootstrapFilename)
     bs.startBootstrapper()
