@@ -83,21 +83,25 @@ class oNode:
                 activeNeighbours = self.neighbours
 
             neighbours = list(set(topologyNeighbours) | set(activeNeighbours))  # Lista de vizinhos sem repetidos
+            ssocket = None
             for neighbourIP in neighbours:
                 try:
-                    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ssocket:
-                        ssocket.settimeout(2)
-                        # ssocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
-                        ssocket.bind((self.ip, ports.NODE_PING_PORT))
-                        ssocket.connect((neighbourIP, ports.NODE_MONITORING_PORT))
-                        helloPacket = TcpPacket("HP")
-                        ssocket.send(pickle.dumps(helloPacket))
+                    ssocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    ssocket.settimeout(2)
+                    ssocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
+                    ssocket.bind((self.ip, ports.NODE_PING_PORT))
+                    ssocket.connect((neighbourIP, ports.NODE_MONITORING_PORT))
+                    helloPacket = TcpPacket("HP")
+                    ssocket.send(pickle.dumps(helloPacket))
                 except ConnectionRefusedError:
                     greyPrint(f"[WARN] Neighbour {neighbourIP} is not up.")
                 except socket.timeout:
                     redPrint(f"[ERROR] Connection to neighbour {neighbourIP} timed out.")
                 except Exception as e:
                     redPrint(f"[ERROR] Failed to send Hello Packet to {neighbourIP}: {e}")
+                finally:
+                    if ssocket:
+                        ssocket.close()
             time.sleep(ut.NODE_PING_INTERVAL)
 
     def neighbourConnectionManagement(self) -> None:
