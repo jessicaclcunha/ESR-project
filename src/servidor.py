@@ -1,7 +1,5 @@
 import socket
 
-import bootstrapper as bs
-
 class Servidor:
 
     def __init__(self) -> None:
@@ -11,6 +9,7 @@ class Servidor:
 
     def startServer(self) -> None:
         pass
+
 
     # Estratégia de flood da rede
     # Distribuição dos vídeos quando pedido, mas estar sempre a criar os pacotes

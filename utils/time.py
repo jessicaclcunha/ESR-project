@@ -1,8 +1,10 @@
 import time
 from datetime import datetime
 
-NODE_RESPONSE_TIMEOUT = 10
+NODE_PING_INTERVAL = 3
 NODE_RESPONSE_WARNING = 5
+NODE_RESPONSE_TIMEOUT = 10
+BEST_NEIGHBOUR_REQUEST_INTERVAL = 10
 
 def formattedTime() -> str:
 	"""
@@ -10,8 +12,17 @@ def formattedTime() -> str:
 	"""
 	return datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S')
 
-def nodePastTimeout(nodeTime: float) -> bool:
+def nodePastTimeout(nodeLastestTimestamp: float) -> str:
 	"""
 	Função que verifica se o tempo de resposta do node ultrapassou o limite.
+
+	:returns: "OK", "WARN" ou "NOTACTIVE".
 	"""
-	return time.time() - nodeTime > NODE_RESPONSE_TIMEOUT
+	timeDiff = time.time() - nodeLastestTimestamp
+
+	if timeDiff < NODE_RESPONSE_WARNING:
+		return "OK"
+	elif timeDiff < NODE_RESPONSE_TIMEOUT:
+		return "WARN"
+	else:
+		return "NOTACTIVE"

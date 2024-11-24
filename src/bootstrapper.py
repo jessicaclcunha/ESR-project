@@ -1,5 +1,5 @@
-import sys
 import os
+import sys
 import json
 import pickle
 import socket
@@ -7,9 +7,8 @@ import threading
 
 from typing import Tuple
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils.time import formattedTime
-from utils.colors import greenPrint, redPrint
 from packets.TcpPacket import TcpPacket
+from utils.colors import greenPrint, redPrint
 
 class Bootstrapper:
     def __init__(self, ip: str, port: int = 8080, filename: str = "cenario_2.json") -> None:
@@ -32,34 +31,34 @@ class Bootstrapper:
             self.nodes = data.get("Nodes", {})
             self.pops = data.get("PoPs", [])
 
-            greenPrint(f"{formattedTime()} [DATA] PoPs: {self.pops}")
-            greenPrint(f"{formattedTime()} [DATA] Nodes: {self.nodes}")
+            greenPrint(f"[DATA] PoPs: {self.pops}")
+            greenPrint(f"[DATA] Nodes: {self.nodes}")
 
         except FileNotFoundError:
             redPrint(f"[ERROR] File {filename} not found in ../topologias/")
             sys.exit(1)
         
 
-    def handleNode(
-        self, nodeSocket: socket.socket, nodeAddress: Tuple[str, int], nodeMessage: str
-    ) -> None:
+    def handleNode(self, nodeSocket: socket.socket, nodeAddress: Tuple[str, int]) -> None:
         """
         Função que envia a lista de vizinhos a cada Node.
         """
-        
+        packet = pickle.loads(nodeSocket.recv(4096))
+        messageType = packet.getMessageType()
+        greenPrint(f"[INFO] Message received: {messageType}")
         try:
             nodeIP = nodeAddress[0] # TODO: Verificar se o IP se obtém assim, a message contém o IP
             data = {}
 
-            if nodeMessage == "PLR":  # PLR = Pop List Request
+            if messageType == "PLR":  # PLR = Pop List Request
                 data = { "PoPs" : self.pops }
-            elif nodeMessage == "NLR":  # NLR = Neighbours List Request
+            elif messageType == "NLR":  # NLR = Neighbours List Request
                 for key,info in self.nodes.items():
                     if nodeIP in key.split('|'):
                         data = info
                         nodeIP = info['IP']
                 data['isPoP'] = nodeIP in self.pops
-                # Retorna um dict { "IP": ipPredefinido, "Neighbours": [IpNeighbours], "isPoP": Bool}
+             # Retorna um dict { "IP": ipPredefinido, "Neighbours": [IpNeighbours], "isPoP": Bool}
 
             response = TcpPacket("R")
             response.addData(data)
@@ -83,13 +82,7 @@ class Bootstrapper:
                 nodeSocket, addr = self.socket.accept()
                 greenPrint(f"[INFO] Node connected: {nodeSocket}")
                 try: 
-                    packet = pickle.loads(self.socket.recv(4096))
-                    messageType = packet.getMessageType()
-                    greenPrint(f"[INFO] Message received: {messageType}")
-                    nodeHandler = threading.Thread(
-                        target=self.handleNode, args=(
-                            self, nodeSocket, addr, messageType)
-                    )
+                    nodeHandler = threading.Thread(target=self.handleNode, args=(self, nodeSocket, addr,))
                     nodeHandler.start()
                     
                 except (pickle.UnpicklingError, AttributeError) as e:

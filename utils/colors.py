@@ -14,16 +14,16 @@ def greenPrint(text: str) -> None:
 	"""
 	Função que imprime a string em verde.
 	"""
-	print(f"{GREEN}{formattedTime()}{text}{RESET}")
+	print(f"{GREEN}[{formattedTime()}] {text}{RESET}")
 
 def redPrint(text: str) -> None:
 	"""
 	Função que imprime a string em vermelho.
 	"""
-	print(f"{RED}{formattedTime()}{text}{RESET}")
+	print(f"{RED}[{formattedTime()}] {text}{RESET}")
 
 def greyPrint(text: str) -> None:
 	"""
 	Função que imprime a string em cinza.
 	"""
-	print(f"{GREY}{formattedTime()}{text}{RESET}")
+	print(f"{GREY}[{formattedTime()}] {text}{RESET}")
