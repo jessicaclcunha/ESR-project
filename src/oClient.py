@@ -59,8 +59,9 @@ class Client:
                         message = TcpPacket("LR", time.time())
                         ssocket.sendall(pickle.dumps(message))
                         packet = pickle.loads(ssocket.recv(4096))
-                        greenPrint(f"[DATA] Latency to {popIp}: {float(packet.data)}")
-                        popLatencies[popIp] = float(packet.data)
+                        latency = packet.getData()['Latency']
+                        greenPrint(f"[DATA] Latency to {popIp}: {latency}")
+                        popLatencies[popIp] = latency
                 except ConnectionRefusedError:
                     greyPrint(f"[WARN] PoP {popIp} not available.")
                 except socket.error as e:
@@ -72,7 +73,7 @@ class Client:
                 lowestLatency = float("inf")
                 
                 for popIp, latency in popLatencies.items():
-                    if latency < lowestLatency:
+                    if latency <= lowestLatency:
                         lowestLatency = latency
                         bestPoP = popIp
 
@@ -87,7 +88,7 @@ class Client:
         Função que realiza o pedido do vídeo ao melhor PoP.
         """
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ssocket:
-            ssocket.connect((self.bestPoP, ports.NODE_CLIENT_LISTENING_PORT))
+            ssocket.connect((self.bestPoP, ports.NODE_VIDEO_REQUEST_PORT))
             greenPrint(f"[INFO] Requesting video to {self.bestPoP}")
             packet = TcpPacket("VR")
             data = { 'video_id' : video }

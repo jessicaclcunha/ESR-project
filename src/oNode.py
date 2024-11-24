@@ -14,10 +14,9 @@ from utils.colors import greenPrint, redPrint, greyPrint
 
 
 class oNode:
-    def __init__(self, port: int = 8080) -> None:
+    def __init__(self) -> None:
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.ip = self.socket.getsockname()[0]
-        self.port = port
         self.neighbours = [] # Vizinhos ativos
         self.neighboursLock = threading.Lock()
         self.topologyNeighbours = [] # Lista de vizinhos da topologia
@@ -45,7 +44,7 @@ class oNode:
        while True:
             client_socket, addr = lsocket.accept()  # Aceitar a cenexão de um cliente
             greenPrint(f"[INFO] Client connection recieved: {addr[0]}")
-            client_handler = threading.Thread(target=self.nodeVideoRequestHandler, args=(client_socket, addr,))  # Criar thread para lidar com o cliente
+            client_handler = threading.Thread(target=self.clientRequestHandler, args=(client_socket, addr,))  # Criar thread para lidar com o cliente
             client_handler.start() 
 
     def startNode(self) -> None:
@@ -56,10 +55,23 @@ class oNode:
             threading.Thread(target=self.clientConnectionManager).start()
         threading.Thread(target=self.neighbourConnectionManagement).start()
         threading.Thread(target=self.neighbourPingSender).start()
-        threading.Thread(target=self.nodeRequestManager).start()
+        threading.Thread(target=self.nodeVideoRequestManager).start()
+        threading.Thread(target=self.nodeGeneralRequestManager).start()
         threading.Thread(target=self.routingTableMonitoring).start()
+
+    def clientRequestHandler(self, client_socket:socket.socket) -> None:
+        """
+        Função responsável por lidar com os pedidos de um client.
+        """
+        packet = pickle.loads(client_socket.recv(4096))
+        messageType = packet.getMessageType()
+        if messageType == "LR":  # Latency Request
+            message = TcpPacket("R", time.time())
+            # message.addData({"Latency": }) # TODO: Retornar o tempo de latência até ao servidor
+            client_socket.sendall(pickle.dumps(message))
+            client_socket.close()
     
-    def neighbourPingSender(self):
+    def neighbourPingSender(self) -> None:
         """
         Função responsável por enviar Hello Packets aos vizinhos de 3 em 3 segundos.
         """
@@ -72,27 +84,23 @@ class oNode:
 
             neighbours = list(set(topologyNeighbours) | set(activeNeighbours))  # Lista de vizinhos sem repetidos
             for neighbourIP in neighbours:
-                ssocket = None
                 try:
-                    ssocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    ssocket.settimeout(2)
-                    ssocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
-                    ssocket.bind((self.ip, ports.NODE_PING_PORT))
-                    ssocket.connect((neighbourIP, ports.NODE_MONITORING_PORT))
-                    helloPacket = TcpPacket("HP")
-                    ssocket.send(pickle.dumps(helloPacket))
+                    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ssocket:
+                        ssocket.settimeout(2)
+                        # ssocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
+                        ssocket.bind((self.ip, ports.NODE_PING_PORT))
+                        ssocket.connect((neighbourIP, ports.NODE_MONITORING_PORT))
+                        helloPacket = TcpPacket("HP")
+                        ssocket.send(pickle.dumps(helloPacket))
                 except ConnectionRefusedError:
                     greyPrint(f"[WARN] Neighbour {neighbourIP} is not up.")
                 except socket.timeout:
                     redPrint(f"[ERROR] Connection to neighbour {neighbourIP} timed out.")
                 except Exception as e:
                     redPrint(f"[ERROR] Failed to send Hello Packet to {neighbourIP}: {e}")
-                finally:
-                    if ssocket:
-                        ssocket.close()
             time.sleep(ut.NODE_PING_INTERVAL)
 
-    def neighbourConnectionManagement(self):
+    def neighbourConnectionManagement(self) -> None:
         """
         Função responsável por receber os Hello Packets dos vizinhos.
         """
@@ -126,7 +134,7 @@ class oNode:
             with self.routingTableLock:
                 self.routingTable[neighbour] = time.time()
 
-    def routingTableMonitoring(self):
+    def routingTableMonitoring(self) -> None:
         """
         Função responsável por monitorizar a tabela de routing e remover vizinhos inativos.
         """
@@ -183,7 +191,7 @@ class oNode:
             time.sleep(ut.NODE_ROUTING_TABLE_MONITORING_INTERVAL)
                 
                 
-    def requestAdditionalNeighbours(self):
+    def requestAdditionalNeighbours(self) -> None:
         """
         Solicita o melhor vizinho do nosso único vizinho disponível.
         """
@@ -193,14 +201,14 @@ class oNode:
             neighbourIP = self.bestNeighbour
         ssocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
-            ssocket.connect((neighbourIP, ports.NODE_REQUEST_PORT))
+            ssocket.connect((neighbourIP, ports.NODE_GENERAL_REQUEST_PORT))
 
             onlyOneNeighbour = True
             while onlyOneNeighbour:
                 requestPacket = TcpPacket("BNR") # Best Neighbour Request
                 ssocket.send(pickle.dumps(requestPacket))
                 response = pickle.loads(ssocket.recv(4096))
-                newNeighbour = response.getData().get("Neighbour", "")
+                newNeighbour = response.getData().get("BestNeighbour", "")
 
                 with self.otherNeighbourLock:
                     if self.otherNeighbourOption != newNeighbour:
@@ -221,7 +229,7 @@ class oNode:
         finally:
             ssocket.close()
     
-    def requestVideoFromNeighbour(self, video_id):
+    def requestVideoFromNeighbour(self, video_id) -> None:
         """
         Solicita o video ao melhor vizinho.
         """
@@ -233,19 +241,17 @@ class oNode:
             if neighbourIP is None:
                 greyPrint(f"[WARN] No neighbour available. Trying again in {ut.NODE_NO_NEIGHBOUR_WAIT_TIME} seconds.")
                 time.sleep(ut.NODE_NO_NEIGHBOUR_WAIT_TIME)
-        ssocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
-            ssocket.connect((neighbourIP, ports.NODE_REQUEST_PORT))
-            videoRequestPacket = TcpPacket("VR")  # Video Request 
-            videoRequestPacket.addData({"video_id": video_id})
-            ssocket.send(pickle.dumps(videoRequestPacket))
-            greenPrint(f"[INFO] Requested video {video_id} from {neighbourIP}")
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ssocket:
+                ssocket.connect((neighbourIP, ports.NODE_VIDEO_REQUEST_PORT))
+                videoRequestPacket = TcpPacket("VR")  # Video Request 
+                videoRequestPacket.addData({"video_id": video_id})
+                ssocket.send(pickle.dumps(videoRequestPacket))
+                greenPrint(f"[INFO] Requested video {video_id} from {neighbourIP}")
         except Exception as e:
             redPrint(f"[ERROR] Failed to request video {video_id} from {neighbourIP}: {e}")
-        finally:
-            ssocket.close()
 
-    def requestStopVideoFromNeighbour(self, video_id):
+    def requestStopVideoFromNeighbour(self, video_id) -> None:
         """
         Solicita a paragem da stream do video ao melhor vizinho.
         """
@@ -257,19 +263,17 @@ class oNode:
             if neighbourIP is None:
                 greyPrint(f"[WARN] No neighbour available. Trying again in {ut.NODE_NO_NEIGHBOUR_WAIT_TIME} seconds.")
                 time.sleep(ut.NODE_NO_NEIGHBOUR_WAIT_TIME)
-        ssocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
-            ssocket.connect((neighbourIP, ports.NODE_REQUEST_PORT))
-            videoRequestPacket = TcpPacket("SVR")  # Stop Video Request
-            videoRequestPacket.addData({"video_id": video_id})
-            ssocket.send(pickle.dumps(videoRequestPacket))
-            greenPrint(f"[INFO] Requested to stop recieving the video {video_id} from {neighbourIP}")
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ssocket:
+                ssocket.connect((neighbourIP, ports.NODE_VIDEO_REQUEST_PORT))
+                videoRequestPacket = TcpPacket("SVR")  # Stop Video Request
+                videoRequestPacket.addData({"video_id": video_id})
+                ssocket.send(pickle.dumps(videoRequestPacket))
+                greenPrint(f"[INFO] Requested to stop recieving the video {video_id} from {neighbourIP}")
         except Exception as e:
             redPrint(f"[ERROR] Failed to request to stop video {video_id} from {neighbourIP}: {e}")
-        finally:
-            ssocket.close()
             
-    def stopStreamingVideo(self, video_id, neighbourIP):
+    def stopStreamingVideo(self, video_id, neighbourIP) -> None:
         """
         Para de transmitir o video para um vizinho e verifica se podemos parar de receber a transmissão do mesmo.
         """
@@ -288,7 +292,7 @@ class oNode:
         except Exception as e:
             redPrint(f"[ERROR] Failed to stop streaming video {video_id}: {e}")
 
-    def startStreamingVideo(self, video_id, neighbourIP):
+    def startStreamingVideo(self, video_id, neighbourIP) -> None:
         """
         Função responsável por iniciar a transmissão do video para um vizinho.
         """
@@ -304,12 +308,12 @@ class oNode:
                 self.streamedVideos[video_id] = {"Streaming": True, "Neighbours": [neighbourIP]} # TODO: Verificar se é aqui que meto True ou mais tarde
             self.requestVideoFromNeighbour(video_id)
     
-    def nodeRequestManager(self):
+    def nodeVideoRequestManager(self) -> None:
         """
         Função responsável por receber os pedidos de vídeo dos vizinhos.
         """
         lsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        lsocket.bind((self.ip, ports.NODE_REQUEST_PORT))
+        lsocket.bind((self.ip, ports.NODE_VIDEO_REQUEST_PORT))
         lsocket.listen()
 
         while True:
@@ -317,20 +321,55 @@ class oNode:
             nodeRequestHandler = threading.Thread(target=self.nodeVideoRequestHandler, args=(nodeSocket, addr,))
             nodeRequestHandler.start()
 
-    def nodeVideoRequestHandler(self, lsocket: socket.socket, addr: Tuple[str, int]):
+    def nodeVideoRequestHandler(self, lsocket: socket.socket, addr: Tuple[str, int]) -> None:
         """
         Função responsável por lidar com os pedidos de vídeo dos vizinhos.
         """
         data = lsocket.recv(4096)
         packet = pickle.loads(data)
         messageType = packet.getMessageType()
-        video_id = packet.getData()['video_id']
+        video_id = packet.getData().get("video_id", "")
         ipAddr = addr[0]
 
         if messageType == "VR":  # Video Request
             self.startStreamingVideo(video_id, ipAddr)
         elif messageType == "SVR":  # Stop Video Request
             self.stopStreamingVideo(video_id, ipAddr)
+
+    def nodeGeneralRequestManager(self) -> None:
+        """
+        Função responsável por receber os pedidos gerais dos vizinhos.
+        """
+        lsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        lsocket.bind((self.ip, ports.NODE_GENERAL_REQUEST_PORT))
+        lsocket.listen()
+
+        while True:
+            nodeSocket, addr = lsocket.accept()
+            nodeRequestHandler = threading.Thread(target=self.nodeGeneralRequestHandler, args=(nodeSocket, addr))
+            nodeRequestHandler.start()
+
+    def nodeGeneralRequestHandler(self, nodeSocket: socket.socket, addr: Tuple[str, int]) -> None:
+        """
+        Função responsável por lidar com os pedidos gerais dos vizinhos.
+        """
+        packet = pickle.loads(nodeSocket.recv(4096))
+        messageType = packet.getMessageType()
+        greenPrint(f"[INFO] {messageType} request recieved from {addr[0]}")
+
+        if messageType == "BNR":  # Best Neighbour Request
+            self.sendBestNeighbour(nodeSocket)
+
+    def sendBestNeighbour(self, nodeSocket: socket.socket) -> None:
+        """
+        Função que envia o melhor vizinho atual do Node.
+        """
+        response = TcpPacket("R")
+        with self.bestNeighbourLock:
+            bestNeighbour = self.bestNeighbour
+        response.addData({"BestNeighbour": bestNeighbour})
+        nodeSocket.sendall(pickle.dumps(response))
+        nodeSocket.close()
 
     def registerWithBootstrapper(self) -> None:
         """
@@ -343,7 +382,6 @@ class oNode:
             greenPrint(f"[INFO] Connected to the Bootstrapper")
 
             packet = TcpPacket("NLR") # NLR = Neighbour List Request
-            packet.addData(self.ip) # FIX: Ver se é necessário, não deve ser
             self.socket.sendall(pickle.dumps(packet))   # Enviar o IP para receber a lista de vizinhos
 
             greenPrint(f"[INFO] Requested Neighbour list")
