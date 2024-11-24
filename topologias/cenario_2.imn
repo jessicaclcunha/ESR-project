@@ -89,6 +89,10 @@ node n4 {
     network-config {
 	hostname O1
 	!
+	interface eth3
+	 ip address 10.0.6.1/24
+	 ipv6 address 2001:0::1/64
+	!
 	interface eth2
 	 ip address 10.0.5.1/24
 	!
@@ -105,6 +109,7 @@ node n4 {
     interface-peer {eth0 n6}
     interface-peer {eth1 n3}
     interface-peer {eth2 n5}
+    interface-peer {eth3 n8}
 }
 
 node n5 {
@@ -157,6 +162,23 @@ node n7 {
     interface-peer {e1 n9}
 }
 
+node n8 {
+    type router
+    model PC
+    network-config {
+	hostname Bootstrapper
+	!
+	interface eth0
+	 ip address 10.0.6.20/24
+	 ipv6 address 2001:0::20/64
+	!
+    }
+    canvas c1
+    iconcoords {643.0 266.0}
+    labelcoords {643.0 298.0}
+    interface-peer {eth0 n4}
+}
+
 link l1 {
     nodes {n10 n6}
     bandwidth 0
@@ -202,6 +224,11 @@ link l9 {
     bandwidth 0
 }
 
+link l10 {
+    nodes {n8 n4}
+    bandwidth 0
+}
+
 canvas c1 {
     name {Canvas1}
 }
@@ -209,7 +236,7 @@ canvas c1 {
 option global {
     interface_names no
     ip_addresses yes
-    ipv6_addresses yes
+    ipv6_addresses no
     node_labels yes
     link_labels yes
     show_api no

@@ -49,6 +49,7 @@ class Bootstrapper:
         greenPrint(f"[INFO] Message received: {messageType}")
         try:
             nodeIP = nodeAddress[0] # TODO: Verificar se o IP se obtém assim, a message contém o IP
+            print(nodeIP)
             data = {}
 
             if messageType == "PLR":  # PLR = Pop List Request
@@ -57,6 +58,7 @@ class Bootstrapper:
                 for key,info in self.nodes.items():
                     if nodeIP in key.split('|'):
                         data = info
+                        print(info)
                         nodeIP = info['IP']
                 data['isPoP'] = nodeIP in self.pops
              # Retorna um dict { "IP": ipPredefinido, "Neighbours": [IpNeighbours], "isPoP": Bool}
@@ -83,7 +85,7 @@ class Bootstrapper:
                 nodeSocket, addr = self.socket.accept()
                 greenPrint(f"[INFO] Node connected: {nodeSocket}")
                 try: 
-                    nodeHandler = threading.Thread(target=self.handleNode, args=(self, nodeSocket, addr,))
+                    nodeHandler = threading.Thread(target=self.handleNode, args=(nodeSocket, addr))
                     nodeHandler.start()
                     
                 except (pickle.UnpicklingError, AttributeError) as e:

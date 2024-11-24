@@ -71,9 +71,11 @@ class oNode:
 
             neighbours = list(set(topologyNeighbours) | set(activeNeighbours))  # Lista de vizinhos sem repetidos
             for neighbourIP in neighbours:
-                ssocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 try:
+                    ssocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                     ssocket.settimeout(2)
+                    ssocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
+                    ssocket.bind((self.ip, ports.NODE_PING_PORT))
                     ssocket.connect((neighbourIP, ports.NODE_MONITORING_PORT))
                     helloPacket = TcpPacket("HP")
                     ssocket.send(pickle.dumps(helloPacket))
