@@ -7,13 +7,14 @@ import threading
 
 from typing import Tuple
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import utils.ports as ports
 from packets.TcpPacket import TcpPacket
 from utils.colors import greenPrint, redPrint
 
 class Bootstrapper:
-    def __init__(self, ip: str, port: int = 8080, filename: str = "cenario_2.json") -> None:
-        self.ip = ip
-        self.port = port
+    def __init__(self, filename: str = "cenario_2.json") -> None:
+        self.ip = ports.BOOTSTRAPPER_IP
+        self.port = ports.BOOTSTRAPPER_PORT
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.nodes = {}
         self.pops = []

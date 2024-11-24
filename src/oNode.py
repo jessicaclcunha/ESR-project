@@ -51,10 +51,6 @@ class oNode:
         """
         Função responsável por esperar conexões e lidar com os pedidos que o Node recebe.
         """
-        # Falar com o cliente se for PoP
-        # Falar com os vizinhos para monitorizar a rede (Enviar e receber)
-        # Falar com os vizinhos para pedir os vídeos por UDP
-
         if self.isPoP:
             threading.Thread(target=self.clientConnectionManager).start()
         threading.Thread(target=self.neighbourConnectionManagement).start()
@@ -307,16 +303,14 @@ class oNode:
         elif messageType == "SVR":  # Stop Video Request
             self.stopStreamingVideo(video_id, ipAddr)
 
-######################
-
-    def registerWithBootstrapper(self, bsIp: str, bsPort: int) -> None:
+    def registerWithBootstrapper(self) -> None:
         """
         Função que popula a lista de vizinhos recebida pelo Bootstrapper, a flag isPoP e o IP onde devemos operar.
         """
         try:
             greenPrint(f"[INFO] Node started")
             greenPrint(f"[INFO] Connecting to Bootstrapper")
-            self.socket.connect((bsIp, bsPort))
+            self.socket.connect((ports.BOOTSTRAPPER_IP, ports.BOOTSTRAPPER_PORT))
             greenPrint(f"[INFO] Connected to the Bootstrapper")
 
             packet = TcpPacket("NLR") # NLR = Neighbour List Request
@@ -340,13 +334,15 @@ class oNode:
 
 
 if __name__ == "__main__":
+    """
     if len(sys.argv) < 3:
         redPrint("[ERROR] Usage: python3 oNode.py <bootstrapIp> <bootstrapPort>")
         sys.exit(1)
     
     bootstrapIp = sys.argv[1]
     bootstrapPort = int(sys.argv[2])
+    """
 
     node = oNode()
-    node.registerWithBootstrapper(bootstrapIp, bootstrapPort)
+    node.registerWithBootstrapper()
     node.startNode()

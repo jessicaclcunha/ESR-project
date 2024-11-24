@@ -5,18 +5,18 @@ import pickle
 import socket
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import utils.ports as ports
 from packets.TcpPacket import TcpPacket
 from utils.colors import greenPrint, redPrint
 
 
 class Client:
-    def __init__(self, video: str):
+    def __init__(self):
         self.pops = []
         self.bestPop = None
-        self.video = video
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    def startClient(self, bootstrapIp: str, bootstrapPort: int) -> None:
+    def startClient(self) -> None:
         """
         Função que comunica com o Bootstrapper e recebe a lista de PoPs.
         """
@@ -24,7 +24,7 @@ class Client:
         greenPrint(f"[INFO] Connecting to Bootstrapper")
             
         try:
-            self.socket.connect((bootstrapIp, bootstrapPort))
+            self.socket.connect((ports.BOOTSTRAPPER_IP, ports.BOOTSTRAPPER_PORT))
         except ConnectionRefusedError:
             redPrint(f"[ERROR] Could not connect to the Bootstrapper")
             sys.exit(1)
@@ -83,30 +83,29 @@ class Client:
         else:
             redPrint(f"[ERROR] No valid latencies received. Cannot determine best PoP")
 
-    def requestVideo(self) -> None:
+    def requestVideo(self, video:str) -> None:
         """
         Função que realiza o pedido do vídeo ao melhor PoP.
         """
         self.socket.connect((self.bestPop, 8080))
         greenPrint(f"[INFO] Requesting video to {self.bestPop}")
         packet = TcpPacket("VR")
-        data = { "video" : self.video }
+        data = { 'video_id' : video }
         packet.addData(data)
         self.socket.sendall(pickle.dumps(packet))
+        self.socket.close()
 
     # TODO: Process of recieving and displaying the video over UDP/RTP
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        redPrint(f"[ERROR] Usage: python3 oClient.py <video> <bootstrapIp> <bootstrapPort>")
+        redPrint(f"[ERROR] Usage: python3 oClient.py <video>")
         sys.exit(1)
 
     video = sys.argv[1]
-    bootstrapIp = sys.argv[2]
-    bootstrapPort = int(sys.argv[3])
 
-    client = Client(video)
-    client.startClient(bootstrapIp, bootstrapPort)
+    client = Client()
+    client.startClient()
     client.findBestPoP()
-    client.requestVideo()
+    client.requestVideo(video)
