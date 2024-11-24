@@ -59,7 +59,7 @@ class Client:
                         message = TcpPacket("LR", time.time())
                         ssocket.sendall(pickle.dumps(message))
                         packet = pickle.loads(ssocket.recv(4096))
-                        latency = packet.getData()['Latency']
+                        latency = packet.getData().get('Latency', float('inf'))
                         greenPrint(f"[DATA] Latency to {popIp}: {latency}")
                         popLatencies[popIp] = latency
                 except ConnectionRefusedError:

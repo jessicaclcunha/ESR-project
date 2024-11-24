@@ -44,7 +44,7 @@ class oNode:
        while True:
             client_socket, addr = lsocket.accept()  # Aceitar a cenexão de um cliente
             greenPrint(f"[INFO] Client connection recieved: {addr[0]}")
-            client_handler = threading.Thread(target=self.clientRequestHandler, args=(client_socket, addr,))  # Criar thread para lidar com o cliente
+            client_handler = threading.Thread(target=self.clientRequestHandler, args=(client_socket,))  # Criar thread para lidar com o cliente
             client_handler.start() 
 
     def startNode(self) -> None:
