@@ -40,6 +40,7 @@ class oNode:
        """
        lsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
        lsocket.bind((self.ip, ports.NODE_CLIENT_LISTENING_PORT))
+       greenPrint(f"Listening for client connections in {self.ip}:{ports.NODE_CLIENT_LISTENING_PORT}")
        lsocket.listen()
        while True:
             client_socket, addr = lsocket.accept()  # Aceitar a cenexão de um cliente

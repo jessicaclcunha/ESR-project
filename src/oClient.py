@@ -51,7 +51,7 @@ class Client:
         while noPoP:
             popLatencies = {}
             for popIp in self.popList:
-                greenPrint(f"[INFO] Connecting to {popIp}")
+                greenPrint(f"[INFO] Connecting to {popIp}:{ports.NODE_CLIENT_LISTENING_PORT}")
                 try:
                     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ssocket:
                         ssocket.connect((popIp, ports.NODE_CLIENT_LISTENING_PORT))
