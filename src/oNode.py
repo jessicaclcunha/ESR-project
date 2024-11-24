@@ -71,6 +71,7 @@ class oNode:
 
             neighbours = list(set(topologyNeighbours) | set(activeNeighbours))  # Lista de vizinhos sem repetidos
             for neighbourIP in neighbours:
+                ssocket = None
                 try:
                     ssocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                     ssocket.settimeout(2)
@@ -86,7 +87,8 @@ class oNode:
                 except Exception as e:
                     redPrint(f"[ERROR] Failed to send Hello Packet to {neighbourIP}: {e}")
                 finally:
-                    ssocket.close()
+                    if ssocket:
+                        ssocket.close()
             time.sleep(ut.NODE_PING_INTERVAL)
 
     def neighbourConnectionManagement(self):
@@ -130,8 +132,8 @@ class oNode:
         while True:
             startThread = False
             onlyOneNeighbour = False
-
             neighboursToRemove = []
+
             with self.routingTableLock:
                 for ip, last_seen in self.routingTable.items():
                     timeDiff = ut.nodePastTimeout(last_seen)
@@ -151,11 +153,22 @@ class oNode:
                         onlyOneNeighbour = True
                     neighbours = self.neighbours
 
+                noNeighbours = False
+                otherOption = None
+                if not neighbours:
+                    noNeighbours = True
+                with self.otherNeighbourLock:
+                    otherOption = self.otherNeighbourOption
                 with self.bestNeighbourLock:
-                    if self.bestNeighbour not in neighbours:
+                    if noNeighbours and otherOption is not None:
+                        self.bestNeighbour = otherOption
+                        greenPrint(f"[INFO] New best neighbour: {self.bestNeighbour}")
+                    elif noNeighbours and otherOption is None:
+                        self.bestNeighbour = None
+                        redPrint(f"[INFO] No neighbour available.")
+                    elif self.bestNeighbour not in neighbours:
                         self.bestNeighbour = neighbours[0]
-                        greyPrint(f"[INFO] New best neighbour: {self.bestNeighbour}")
-
+                        greenPrint(f"[INFO] New best neighbour: {self.bestNeighbour}")
                 redPrint(f"[WARN] Neighbor {ip} removed due to timeout")
 
             with self.requestedOtherNeighbourLock:
@@ -166,7 +179,7 @@ class oNode:
             if startThread:
                 threading.Thread(target=self.requestAdditionalNeighbours).start()
                  
-            time.sleep(3)
+            time.sleep(ut.NODE_ROUTING_TABLE_MONITORING_INTERVAL)
                 
                 
     def requestAdditionalNeighbours(self):
@@ -174,8 +187,9 @@ class oNode:
         Solicita o melhor vizinho do nosso único vizinho disponível.
         """
         greyPrint("Only one neighbour available. Requesting an additional neighbour.")
-        with self.neighboursLock:
-            neighbourIP = self.neighbours[0]
+        with self.bestNeighbourLock:
+            # neighbourIP = self.neighbours[0]
+            neighbourIP = self.bestNeighbour
         ssocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             ssocket.connect((neighbourIP, ports.NODE_REQUEST_PORT))
@@ -210,8 +224,14 @@ class oNode:
         """
         Solicita o video ao melhor vizinho.
         """
-        with self.bestNeighbourLock:
-            neighbourIP = self.bestNeighbour
+        neighbourIP = None
+        while neighbourIP is None:
+            with self.bestNeighbourLock:
+                if self.bestNeighbour is not None:
+                    neighbourIP = self.bestNeighbour
+            if neighbourIP is None:
+                greyPrint(f"[WARN] No neighbour available. Trying again in {ut.NODE_NO_NEIGHBOUR_WAIT_TIME} seconds.")
+                time.sleep(ut.NODE_NO_NEIGHBOUR_WAIT_TIME)
         ssocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             ssocket.connect((neighbourIP, ports.NODE_REQUEST_PORT))
@@ -228,8 +248,14 @@ class oNode:
         """
         Solicita a paragem da stream do video ao melhor vizinho.
         """
-        with self.bestNeighbourLock:
-            neighbourIP = self.bestNeighbour
+        neighbourIP = None
+        while neighbourIP is None:
+            with self.bestNeighbourLock:
+                if self.bestNeighbour is not None:
+                    neighbourIP = self.bestNeighbour
+            if neighbourIP is None:
+                greyPrint(f"[WARN] No neighbour available. Trying again in {ut.NODE_NO_NEIGHBOUR_WAIT_TIME} seconds.")
+                time.sleep(ut.NODE_NO_NEIGHBOUR_WAIT_TIME)
         ssocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             ssocket.connect((neighbourIP, ports.NODE_REQUEST_PORT))

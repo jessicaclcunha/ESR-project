@@ -17,7 +17,7 @@ class Bootstrapper:
         self.port = ports.BOOTSTRAPPER_PORT
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.nodes = {}
-        self.pops = []
+        self.popList = []
 
         self.fillConnections(filename)
 
@@ -30,9 +30,9 @@ class Bootstrapper:
                 data = json.load(file)
 
             self.nodes = data.get("Nodes", {})
-            self.pops = data.get("PoPs", [])
+            self.popList = data.get("PoPs", [])
 
-            greenPrint(f"[DATA] PoPs: {self.pops}")
+            greenPrint(f"[DATA] PoPs: {self.popList}")
             greenPrint(f"[DATA] Nodes: {self.nodes}")
 
         except FileNotFoundError:
@@ -48,24 +48,21 @@ class Bootstrapper:
         messageType = packet.getMessageType()
         greenPrint(f"[INFO] Message received: {messageType}")
         try:
-            nodeIP = nodeAddress[0] # TODO: Verificar se o IP se obtém assim, a message contém o IP
-            print(nodeIP)
+            nodeIP = nodeAddress[0]
             data = {}
 
             if messageType == "PLR":  # PLR = Pop List Request
-                data = { "PoPs" : self.pops }
+                data = { "PoPList" : self.popList }
             elif messageType == "NLR":  # NLR = Neighbours List Request
                 for key,info in self.nodes.items():
                     if nodeIP in key.split('|'):
                         data = info
-                        print(info)
                         nodeIP = info['IP']
-                data['isPoP'] = nodeIP in self.pops
-             # Retorna um dict { "IP": ipPredefinido, "Neighbours": [IpNeighbours], "isPoP": Bool}
+                        break
+                data['isPoP'] = nodeIP in self.popList
 
-            response = TcpPacket("R")
+            response = TcpPacket("R")  # Response
             response.addData(data)
-
             nodeSocket.send(pickle.dumps(response))
         except Exception as e:
             redPrint(f"[ERROR] Failed to handle node {nodeAddress}: {e}")
@@ -84,13 +81,8 @@ class Bootstrapper:
             while True:
                 nodeSocket, addr = self.socket.accept()
                 greenPrint(f"[INFO] Node connected: {nodeSocket}")
-                try: 
-                    nodeHandler = threading.Thread(target=self.handleNode, args=(nodeSocket, addr))
-                    nodeHandler.start()
-                    
-                except (pickle.UnpicklingError, AttributeError) as e:
-                    redPrint(f"[ERROR] Failed to process message from {addr}: {e}")
-                    nodeSocket.close()
+                nodeHandler = threading.Thread(target=self.handleNode, args=(nodeSocket, addr))
+                nodeHandler.start()
 
         except Exception as e:
             redPrint(f"[ERROR] Could not start Bootstrapper: {e}")
