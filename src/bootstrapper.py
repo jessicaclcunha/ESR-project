@@ -9,7 +9,7 @@ from typing import Tuple
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import utils.ports as ports
 from packets.TcpPacket import TcpPacket
-from utils.colors import greenPrint, redPrint
+from utils.colors import greenPrint, greyPrint, redPrint
 
 class Bootstrapper:
     def __init__(self, filename: str = "cenario_2.json") -> None:
@@ -83,16 +83,18 @@ class Bootstrapper:
                 greenPrint(f"[INFO] Node connected: {nodeSocket}")
                 nodeHandler = threading.Thread(target=self.handleNode, args=(nodeSocket, addr))
                 nodeHandler.start()
-
+        except KeyboardInterrupt:
+            redPrint("[SHUTDOWN] Shutting down bootstrapper...")
         except Exception as e:
             redPrint(f"[ERROR] Could not start Bootstrapper: {e}")
+        finally:
             self.socket.close()
+            greyPrint("[SHUTDOWN] Bootstrapper socket closed.")
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        redPrint(
-            "[ERROR] Usage: python3 bootstrapper.py <bootstrapFilename>")
+        redPrint("[ERROR] Usage: python3 bootstrapper.py <topologyJsonFilename>")
         sys.exit(1)
     
     bootstrapFilename = sys.argv[1]
