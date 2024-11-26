@@ -76,6 +76,8 @@ class oNode:
             udp_socket.sendto(responseSerialized, addr)
             greenPrint(f"[INFO] Latency sent to {addr[0]}")
         # TODO: elif messageType == "VR":  # Video Request
+        # Send an ack after recieving it
+        # Check if the neighbour is in the neighbours stremead list, to not have duplicates
     
     def neighbourPingSender(self) -> None:
         """

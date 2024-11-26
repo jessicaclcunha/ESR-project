@@ -1,5 +1,6 @@
 # MESSAGE TYPES
 # "R" (Response)
+# "ACK" (Acknowledgement)
 # "VR"(Video Request)
 # "SVR" (Stop Video Request)
 # "LR"(Latency Request)

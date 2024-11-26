@@ -14,6 +14,7 @@ from utils.colors import greenPrint, redPrint, greyPrint
 
 class Client:
     def __init__(self):
+        self.ip = None
         self.popList = []
         self.bestPoP = None
 
@@ -25,7 +26,8 @@ class Client:
         greenPrint(f"[INFO] Connecting to Bootstrapper")
             
         try:
-            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as ssocket:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ssocket:
+                self.ip = ssocket.getsockname()[0]
                 ssocket.connect((ports.BOOTSTRAPPER_IP, ports.BOOTSTRAPPER_PORT))
                 greenPrint(f"[INFO] Connected to the Bootstrapper")
                 message = TcpPacket("PLR")  # PLR = PoP List Request
@@ -91,13 +93,31 @@ class Client:
         """
         Função que realiza o pedido do vídeo ao melhor PoP.
         """
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ssocket:
-            ssocket.connect((self.bestPoP, ports.NODE_VIDEO_REQUEST_PORT))
-            greenPrint(f"[INFO] Requesting video to {self.bestPoP}")
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sUDPsocket:
+            sUDPsocket.settimeout(2)
+            greenPrint(f"[INFO] Requesting video {video} to {self.bestPoP}")
             packet = TcpPacket("VR")
             data = { 'video_id' : video }
             packet.addData(data)
-            ssocket.sendall(pickle.dumps(packet))
+            serializedPacket = pickle.dumps(packet)
+
+            notAcknowledged = True
+            while notAcknowledged:
+                try:
+                    sUDPsocket.sendto(serializedPacket, (self.bestPoP, ports.NODE_VIDEO_REQUEST_PORT))
+
+                    data, _ = sUDPsocket.recvfrom(4096)
+                    response = pickle.loads(data)
+
+                    if response.getMessageType() == "ACK":
+                        greenPrint(f"[INFO] ACK recieved from {self.bestPoP}.")
+                        notAcknowledged = False
+                except socket.timeout:
+                    greyPrint(f"[WARN] Video request to {self.bestPoP} timed out. Trying again in {ut.CLIENT_VIDEO_REQUEST_WAIT_TIME} seconds.")
+                    time.sleep(ut.CLIENT_VIDEO_REQUEST_WAIT_TIME)
+                except Exception as e:
+                    redPrint(f"[ERROR] Error during video request: {e}")
+                    break
 
     # TODO: Process of recieving and displaying the video over UDP/RTP
     
@@ -109,7 +129,7 @@ class Client:
         frames = []
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_socket:
-                udp_socket.bind((ports.CLIENT_UDP_IP, ports.CLIENT_UDP_PORT))
+                udp_socket.bind((self.ip, ports.UDP_VIDEO_PORT))
                 while True:
                     packet, _ = udp_socket.recvfrom(65536)
                     rtp_packet = RtpPacket()
