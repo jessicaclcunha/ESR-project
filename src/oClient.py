@@ -104,7 +104,7 @@ class Client:
             notAcknowledged = True
             while notAcknowledged:
                 try:
-                    sUDPsocket.sendto(serializedPacket, (self.bestPoP, ports.NODE_VIDEO_REQUEST_PORT))
+                    sUDPsocket.sendto(serializedPacket, (self.bestPoP, ports.NODE_CLIENT_LISTENING_PORT))
 
                     data, addr = sUDPsocket.recvfrom(4096)
                     response = pickle.loads(data)
