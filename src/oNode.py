@@ -147,12 +147,24 @@ class oNode:
         if messageType == "HP":
             neighbour = addr[0]
             greenPrint(f"[INFO] Hello Packet received from  neighbour {neighbour}")
-            with self.neighboursLock:
-                if neighbour not in self.neighbours:
-                    self.neighbours.append(neighbour)
-                    greenPrint(f"[DATA] Neighbour {neighbour} just appeared and was added to the active neighbour list.")
-            with self.routingTableLock:
-                self.routingTable[neighbour] = time.time()
+            inTopology = True
+            onlyNeighbour = False
+            with self.topologyNeighboursLock:
+                if neighbour not in self.topologyNeighbours:
+                    redPrint(f"[ATTENTION] Non expected Hello Packet recieved from {neighbour}")
+                    inTopology = False
+            if inTopology:
+                with self.neighboursLock:
+                    if neighbour not in self.neighbours:
+                        self.neighbours.append(neighbour)
+                        greenPrint(f"[DATA] Neighbour {neighbour} just appeared and was added to the active neighbour list.")
+                    if len(self.neighbours) == 1:
+                        onlyNeighbour = True
+                with self.routingTableLock:
+                    self.routingTable[neighbour] = time.time()
+            if onlyNeighbour:
+                with self.bestNeighbourLock:
+                    self.bestNeighbour = neighbour
 
     def routingTableMonitoring(self) -> None:
         """
