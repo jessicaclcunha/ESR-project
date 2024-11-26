@@ -44,7 +44,7 @@ class oNode:
        while True:
             try:
                 data, addr = lUDPsocket.recvfrom(4096)  # Aceitar a cenexão de um cliente
-                greenPrint(f"[INFO] Client connection recieved: {addr[0]}")
+                greenPrint(f"[INFO] Packet recieved from {addr[0]}")
                 client_handler = threading.Thread(target=self.clientRequestHandler, args=(lUDPsocket,data,addr,))  # Criar thread para lidar com o cliente
                 client_handler.start() 
             except Exception as e:
@@ -62,9 +62,12 @@ class oNode:
         threading.Thread(target=self.nodeGeneralRequestManager).start()
         threading.Thread(target=self.routingTableMonitoring).start()
 
-    def clientRequestHandler(self, udp_socket: socket.socket, data: bytes, addr: Tuple[str,int]) -> None:
+    def clientRequestHandler(self, clientSocket: socket.socket, data: bytes, addr: Tuple[str,int]) -> None:
         """
         Função responsável por lidar com os pedidos de um client.
+
+        :param clientSocket: Socket UDP.
+        :param data: Pacote TcpPacket serializado.
         """
         packet = pickle.loads(data)
         messageType = packet.getMessageType()
@@ -73,15 +76,20 @@ class oNode:
             message = TcpPacket("R", time.time())
             # message.addData({"Latency": }) # TODO: Retornar o tempo de latência até ao servidor
             responseSerialized = pickle.dumps(message)
-            udp_socket.sendto(responseSerialized, addr)
+            clientSocket.sendto(responseSerialized, addr)
             greenPrint(f"[INFO] Latency sent to {addr[0]}")
-        # TODO: elif messageType == "VR":  # Video Request
-        # Send an ack after recieving it
-        # Check if the neighbour is in the neighbours stremead list, to not have duplicates
+        elif messageType == "VR":  # Video Request
+            video_id = packet.getData().get("video_id", "")
+            greenPrint(f"[INFO] Request for video {video_id} recieved from {addr[0]}")
+            message = TcpPacket("ACK")
+            responseSerialized = pickle.dumps(message)
+            clientSocket.sendto(responseSerialized, addr)
+            greyPrint(f"[INFO] ACK sent to client {addr[0]}")
+            self.startStreamingVideo(video_id, addr[0])
     
     def neighbourPingSender(self) -> None:
         """
-        Função responsável por enviar Hello Packets aos vizinhos de 3 em 3 segundos.
+        Função responsável por enviar Hello Packets periodicamente aos vizinhos.
         """
         greenPrint(f"[INFO] Ping Thread started on port {ports.NODE_PING_PORT}")
         while True:
@@ -241,7 +249,7 @@ class oNode:
         finally:
             ssocket.close()
     
-    def requestVideoFromNeighbour(self, video_id) -> None:
+    def requestVideoFromNeighbour(self, video_id:str) -> None:
         """
         Solicita o video ao melhor vizinho.
         """
@@ -263,7 +271,7 @@ class oNode:
         except Exception as e:
             redPrint(f"[ERROR] Failed to request video {video_id} from {neighbourIP}: {e}")
 
-    def requestStopVideoFromNeighbour(self, video_id) -> None:
+    def requestStopVideoFromNeighbour(self, video_id:str) -> None:
         """
         Solicita a paragem da stream do video ao melhor vizinho.
         """
@@ -285,7 +293,7 @@ class oNode:
         except Exception as e:
             redPrint(f"[ERROR] Failed to request to stop video {video_id} from {neighbourIP}: {e}")
             
-    def stopStreamingVideo(self, video_id, neighbourIP) -> None:
+    def stopStreamingVideo(self, video_id:str, neighbourIP:str) -> None:
         """
         Para de transmitir o video para um vizinho e verifica se podemos parar de receber a transmissão do mesmo.
         """
@@ -304,7 +312,7 @@ class oNode:
         except Exception as e:
             redPrint(f"[ERROR] Failed to stop streaming video {video_id}: {e}")
 
-    def startStreamingVideo(self, video_id, neighbourIP) -> None:
+    def startStreamingVideo(self, video_id:str, neighbourIP:str) -> None:
         """
         Função responsável por iniciar a transmissão do video para um vizinho.
         """
@@ -313,11 +321,12 @@ class oNode:
         if video_id in streamedVideosList:
             greenPrint(f"[INFO] Forwarding video {video_id} to {neighbourIP}")
             with self.streamedVideosLock:
-                self.streamedVideos[video_id]["Neighbours"].append(neighbourIP)
+                if neighbourIP not in self.streamedVideos[video_id]["Neighbours"]:
+                    self.streamedVideos[video_id]["Neighbours"].append(neighbourIP)
         else:
             greenPrint(f"[INFO] Requesting video {video_id} from best neighbour")
             with self.streamedVideosLock:
-                self.streamedVideos[video_id] = {"Streaming": True, "Neighbours": [neighbourIP]} # TODO: Verificar se é aqui que meto True ou mais tarde
+                self.streamedVideos[video_id] = {"Streaming": True, "Neighbours": [neighbourIP]} # FIX: Verificar se é aqui que meto True ou mais tarde, deve ser só quando receber o vídeo por UDP
             self.requestVideoFromNeighbour(video_id)
     
     def nodeVideoRequestManager(self) -> None:

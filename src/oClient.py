@@ -106,10 +106,10 @@ class Client:
                 try:
                     sUDPsocket.sendto(serializedPacket, (self.bestPoP, ports.NODE_VIDEO_REQUEST_PORT))
 
-                    data, _ = sUDPsocket.recvfrom(4096)
+                    data, addr = sUDPsocket.recvfrom(4096)
                     response = pickle.loads(data)
 
-                    if response.getMessageType() == "ACK":
+                    if response.getMessageType() == "ACK" and addr[0] == self.bestPoP:
                         greenPrint(f"[INFO] ACK recieved from {self.bestPoP}.")
                         notAcknowledged = False
                 except socket.timeout:
