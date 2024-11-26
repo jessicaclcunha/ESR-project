@@ -8,6 +8,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import utils.time as ut
 import utils.ports as ports
 from packets.TcpPacket import TcpPacket
+from packets.RtpPacket import RtpPacket
 from utils.colors import greenPrint, redPrint, greyPrint
 
 
@@ -96,6 +97,24 @@ class Client:
             ssocket.sendall(pickle.dumps(packet))
 
     # TODO: Process of recieving and displaying the video over UDP/RTP
+    
+    def receiveVideo(self) -> list:
+        """
+        Recebe o vídeo como uma sequência de pacotes RTP.
+        """
+        import socket
+        frames = []
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_socket:
+                udp_socket.bind((ports.CLIENT_UDP_IP, ports.CLIENT_UDP_PORT))
+                while True:
+                    packet, _ = udp_socket.recvfrom(65536)
+                    rtp_packet = RtpPacket()
+                    rtp_packet.decode(packet)
+                    frames.append(rtp_packet.getPayload())
+        except socket.error as e:
+            redPrint(f"[ERROR] RTP socket error: {e}")
+        return frames
 
 
 if __name__ == "__main__":
