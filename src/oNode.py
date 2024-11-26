@@ -37,15 +37,18 @@ class oNode:
        """
        Função responsável por aceitar as ligações dos clientes.
        """
-       lsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-       lsocket.bind((self.ip, ports.NODE_CLIENT_LISTENING_PORT))
+       lUDPsocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+       lUDPsocket.bind((self.ip, ports.NODE_CLIENT_LISTENING_PORT))
        greenPrint(f"Listening for client connections in {self.ip}:{ports.NODE_CLIENT_LISTENING_PORT}")
-       lsocket.listen()
+
        while True:
-            client_socket, addr = lsocket.accept()  # Aceitar a cenexão de um cliente
-            greenPrint(f"[INFO] Client connection recieved: {addr[0]}")
-            client_handler = threading.Thread(target=self.clientRequestHandler, args=(client_socket,))  # Criar thread para lidar com o cliente
-            client_handler.start() 
+            try:
+                data, addr = lUDPsocket.recvfrom(4096)  # Aceitar a cenexão de um cliente
+                greenPrint(f"[INFO] Client connection recieved: {addr[0]}")
+                client_handler = threading.Thread(target=self.clientRequestHandler, args=(lUDPsocket,data,addr,))  # Criar thread para lidar com o cliente
+                client_handler.start() 
+            except Exception as e:
+                redPrint(f"[ERROR] Error in client connection manager: {e}")
 
     def startNode(self) -> None:
         """
@@ -59,17 +62,20 @@ class oNode:
         threading.Thread(target=self.nodeGeneralRequestManager).start()
         threading.Thread(target=self.routingTableMonitoring).start()
 
-    def clientRequestHandler(self, client_socket:socket.socket) -> None:
+    def clientRequestHandler(self, udp_socket: socket.socket, data: bytes, addr: Tuple[str,int]) -> None:
         """
         Função responsável por lidar com os pedidos de um client.
         """
-        packet = pickle.loads(client_socket.recv(4096))
+        packet = pickle.loads(data)
         messageType = packet.getMessageType()
+
         if messageType == "LR":  # Latency Request
             message = TcpPacket("R", time.time())
             # message.addData({"Latency": }) # TODO: Retornar o tempo de latência até ao servidor
-            client_socket.sendall(pickle.dumps(message))
-            client_socket.close()
+            responseSerialized = pickle.dumps(message)
+            udp_socket.sendto(responseSerialized, addr)
+            greenPrint(f"[INFO] Latency sent to {addr[0]}")
+        # TODO: elif messageType == "VR":  # Video Request
     
     def neighbourPingSender(self) -> None:
         """

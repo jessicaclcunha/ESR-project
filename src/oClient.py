@@ -25,7 +25,7 @@ class Client:
         greenPrint(f"[INFO] Connecting to Bootstrapper")
             
         try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ssocket:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as ssocket:
                 ssocket.connect((ports.BOOTSTRAPPER_IP, ports.BOOTSTRAPPER_PORT))
                 greenPrint(f"[INFO] Connected to the Bootstrapper")
                 message = TcpPacket("PLR")  # PLR = PoP List Request
@@ -54,17 +54,20 @@ class Client:
             for popIp in self.popList:
                 greenPrint(f"[INFO] Connecting to {popIp}:{ports.NODE_CLIENT_LISTENING_PORT}")
                 try:
-                    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ssocket:
-                        ssocket.connect((popIp, ports.NODE_CLIENT_LISTENING_PORT))
-                        greenPrint(f"[INFO] Connected to {popIp}")
+                    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sUDPsocket:
                         message = TcpPacket("LR", time.time())
-                        ssocket.sendall(pickle.dumps(message))
-                        packet = pickle.loads(ssocket.recv(4096))
+                        serializedMessage = pickle.dumps(message)
+                        sUDPsocket.sendto(serializedMessage, (popIp, ports.NODE_CLIENT_LISTENING_PORT))
+
+                        sUDPsocket.settimeout(2)
+                        data, _ = sUDPsocket.recvfrom(4096)
+                        packet = pickle.loads(data)
+                        # TODO: Adicionar a esta latency a latency do PoP para mim, pode ser obtifo com o packet.getTimestamp(), verificar
                         latency = packet.getData().get('Latency', float('inf'))
                         greenPrint(f"[DATA] Latency to {popIp}: {latency}")
                         popLatencies[popIp] = latency
-                except ConnectionRefusedError:
-                    greyPrint(f"[WARN] PoP {popIp} not available.")
+                except socket.timeout:
+                    greyPrint(f"[WARN] PoP {popIp} did not respond.")
                 except socket.error as e:
                     redPrint(f"[ERROR] {e}")
 
