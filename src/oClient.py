@@ -146,13 +146,13 @@ class Client:
         image = Image.open(frame_data)
         photo = ImageTk.PhotoImage(image)
         self.label.config(image=photo)
+        self.label.image = photo
         
     def run(self):
         video_thread = threading.Thread(target=self.receiveVideo)
         video_thread.daemon = True
         video_thread.start()
-        
-        
+        self.master.mainloop()
 
 
 if __name__ == "__main__":
