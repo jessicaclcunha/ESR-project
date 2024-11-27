@@ -161,18 +161,20 @@ class oNode:
                     if len(self.neighbours) == 1:
                         onlyNeighbour = True
                 with self.routingTableLock:
-                    self.routingTable[neighbour] = {"LT":float("inf"), "LS":time.time()}
+                    if neighbour not in self.routingTable.keys():
+                        self.routingTable[neighbour] = {"LT":float("inf"), "LS":time.time(), "hops": 2**31-1}
+                    else:
+                        self.routingTable[neighbour]["LS"] = time.time()
             if onlyNeighbour:
                 # TODO: Replace with switchBestNeighour function, that also request the videos it is streaming
                 with self.bestNeighbourLock:
                     self.bestNeighbour = neighbour
         elif messageType == "FLOOD":
-            greenPrint(f"[INFO] FLOOD Packet received from neighbour {neighbour}")
             latency = time.time() - packet.getData()["ServerTimestamp"]
+            hops = packet.getData()["hops"]
+            greenPrint(f"[INFO] FLOOD Packet received from neighbour {neighbour} with latency {latency} and {hops} hops")
             with self.routingTableLock:
-                if neighbour not in self.routingTable.keys():
-                    self.routingTable[neighbour] = {"LT": latency, "LS": time.time()}
-                self.routingTable[neighbour]["LT"] = latency 
+                self.routingTable[neighbour] = {"LT": latency, "LS": time.time(), "hops": hops}
             with self.neighboursLock:
                 if neighbour not in self.neighbours:
                     self.neighbours.append(neighbour)
@@ -183,6 +185,7 @@ class oNode:
             with self.routingTableLock:
                 if latency <= self.routingTable[bestNeighbour]["LT"]:
                     isBest = True
+                    print("best")
                 print(self.routingTable)
             if isBest:
                 with self.bestNeighbourLock:
@@ -193,7 +196,6 @@ class oNode:
                 floodPacket = TcpPacket("FLOOD")
                 floodPacket.addData(data)
                 self.propagateFlood(floodPacket, neighbour)
-        # verificar se é o melhor que temos, se for, propagar o FLOOD para os meus vizinhos, menos o que me enviou a mim, neste caso a variável neighbour
 
     def propagateFlood(self, floodPacket: TcpPacket, originNeighbour: str) -> None:
         """
