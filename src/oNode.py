@@ -181,8 +181,9 @@ class oNode:
             with self.bestNeighbourLock:
                 bestNeighbour = self.bestNeighbour
             with self.routingTableLock:
-                if latency < self.routingTable[bestNeighbour]["LT"]:
+                if latency <= self.routingTable[bestNeighbour]["LT"]:
                     isBest = True
+                print(self.routingTable)
             if isBest:
                 with self.bestNeighbourLock:
                     # TODO: Trocar para função switchBestNeighbour
@@ -208,17 +209,17 @@ class oNode:
         for neighbour in neighbours:
             try:
                 ssocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                ssocket.bind((self.ip, ports.NODE_MONITORING_PORT))
+                ssocket.bind((self.ip, ports.NODE_FLOOD_SENDING_PORT))
                 ssocket.settimeout(2)
                 ssocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
                 ssocket.connect((neighbour, ports.NODE_MONITORING_PORT))
                 ssocket.sendall(pickle.dumps(floodPacket))
             except ConnectionRefusedError:
-                redPrint(f"[ERROR] Neighbour {originNeighbour} is not up.")
+                redPrint(f"[ERROR] Neighbour {neighbour} is not up.")
             except socket.timeout:
-                redPrint(f"[ERROR] Connection to neighbour {originNeighbour} timed out.")
+                redPrint(f"[ERROR] Connection to neighbour {neighbour} timed out.")
             except Exception as e:
-                redPrint(f"[ERROR] Failed to send Flood Packet to {originNeighbour}: {e}")
+                redPrint(f"[ERROR] Failed to send Flood Packet to {neighbour}: {e}")
             finally:
                 if ssocket:
                     ssocket.close()
@@ -290,8 +291,8 @@ class oNode:
             neighbourIP = self.bestNeighbour
         ssocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
+            ssocket.bind((self.ip, ports.ONLY_NEIGHBOUR_REQUESTS))
             ssocket.connect((neighbourIP, ports.NODE_GENERAL_REQUEST_PORT))
-
             onlyOneNeighbour = True
             while onlyOneNeighbour:
                 requestPacket = TcpPacket("BNR") # Best Neighbour Request
