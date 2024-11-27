@@ -312,10 +312,14 @@ class oNode:
                 response = pickle.loads(ssocket.recv(4096))
                 newNeighbour = response.getData().get("BestNeighbour", "")
 
-                with self.otherNeighbourLock:
-                    if self.otherNeighbourOption != newNeighbour:
-                        self.otherNeighbourOption = newNeighbour
-                        greenPrint(f"[INFO] Updated otherNeighbourOption: {newNeighbour}")
+
+                if newNeighbour == self.ip:
+                    redPrint("[WARN] I'm the best neighbour of my only neighbour. Skipping...")
+                else:
+                    with self.otherNeighbourLock:
+                        if self.otherNeighbourOption != newNeighbour:
+                            self.otherNeighbourOption = newNeighbour
+                            greenPrint(f"[INFO] Updated otherNeighbourOption: {newNeighbour}")
                 
             except Exception as e:
                 redPrint(f"[ERROR] Failed to request additional neighbours from {neighbourIP}: {e}")
