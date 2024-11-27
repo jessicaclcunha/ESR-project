@@ -16,7 +16,7 @@ from utils.colors import greenPrint, redPrint, greyPrint
 class oNode:
     def __init__(self) -> None:
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.ip = self.socket.getsockname()[0]
+        self.ip = None
         self.neighbours = [] # Vizinhos ativos
         self.neighboursLock = threading.Lock()
         self.topologyNeighbours = [] # Lista de vizinhos da topologia
@@ -25,7 +25,7 @@ class oNode:
         self.otherNeighbourLock = threading.Lock()
         self.requestedOtherNeighbour = False
         self.requestedOtherNeighbourLock = threading.Lock()
-        self.routingTable = {} # "IP": Time
+        self.routingTable = {} # "IP": {"LS":Time, "LT":Time} LS = Last Seen, LT = Latency
         self.routingTableLock = threading.Lock()
         self.isPoP = False
         self.streamedVideos = {} # "IP" : {"Streaming": True/False, "Neighbours": []}
@@ -143,9 +143,9 @@ class oNode:
         """
         packet = pickle.loads(nodeSocket.recv(4096))
         messageType = packet.getMessageType()
+        neighbour = addr[0]
 
         if messageType == "HP":
-            neighbour = addr[0]
             greenPrint(f"[INFO] Hello Packet received from  neighbour {neighbour}")
             inTopology = True
             onlyNeighbour = False
@@ -161,10 +161,15 @@ class oNode:
                     if len(self.neighbours) == 1:
                         onlyNeighbour = True
                 with self.routingTableLock:
-                    self.routingTable[neighbour] = time.time()
+                    self.routingTable[neighbour]["LS"] = time.time()
             if onlyNeighbour:
+                # TODO: Replace with switchBestNeighour function, that also request the videos it is streaming
                 with self.bestNeighbourLock:
                     self.bestNeighbour = neighbour
+        # TODO: elif messageType == "FLOOD":
+        # retirar o timestamp do servidor, deve vir no campo data["ServerTimestamp"]
+        # adicionar à routingTable[neighbour]["LT"]
+        # verificar se é o melhor que temos, se for, propagar o FLOOD para os meus vizinhos, menos o que me enviou a mim, neste caso a variável neighbour
 
     def routingTableMonitoring(self) -> None:
         """
@@ -176,8 +181,8 @@ class oNode:
             neighboursToRemove = []
 
             with self.routingTableLock:
-                for ip, last_seen in self.routingTable.items():
-                    timeDiff = ut.nodePastTimeout(last_seen)
+                for ip, neighbourInfo in self.routingTable.items():
+                    timeDiff = ut.nodePastTimeout(neighbourInfo["LS"])  # LS = Last Seen
                     if timeDiff == "WARN":
                         greyPrint(f"[WARN] Neighbor {ip} is not responding. Trying again")
                     elif timeDiff == "NOTACTIVE":
@@ -392,6 +397,7 @@ class oNode:
 
         if messageType == "BNR":  # Best Neighbour Request
             self.sendBestNeighbour(nodeSocket)
+            # TODO: Maybe avisar o nó que demos o IP dele, para ele estar à espera
 
     def sendBestNeighbour(self, nodeSocket: socket.socket) -> None:
         """
