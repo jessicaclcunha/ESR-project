@@ -266,7 +266,7 @@ class oNode:
                         self.bestNeighbour = None
                         redPrint(f"[INFO] No neighbour available.")
                     elif self.bestNeighbour not in neighbours:
-                        self.bestNeighbour = neighbours[0]
+                        self.bestNeighbour = neighbours[0]  # Change to find best neighbour in terms of latency
                         greenPrint(f"[INFO] New best neighbour: {self.bestNeighbour}")
                 redPrint(f"[WARN] Neighbor {ip} removed due to timeout")
 
@@ -286,15 +286,25 @@ class oNode:
         Solicita o melhor vizinho do nosso único vizinho disponível.
         """
         greyPrint("Only one neighbour available. Requesting an additional neighbour.")
-        with self.bestNeighbourLock:
-            # neighbourIP = self.neighbours[0]
-            neighbourIP = self.bestNeighbour
-        ssocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            ssocket.bind((self.ip, ports.ONLY_NEIGHBOUR_REQUESTS))
-            ssocket.connect((neighbourIP, ports.NODE_GENERAL_REQUEST_PORT))
-            onlyOneNeighbour = True
-            while onlyOneNeighbour:
+        onlyOneNeighbour = True
+
+        while onlyOneNeighbour:
+            with self.neighboursLock:
+                if len(self.neighbours) == 1:
+                    onlyOneNeighbour = True
+            if not onlyOneNeighbour:
+                with self.requestedOtherNeighbourLock:
+                    self.requestedOtherNeighbour = False
+                break
+
+            with self.bestNeighbourLock:
+                # neighbourIP = self.neighbours[0]
+                neighbourIP = self.bestNeighbour
+            ssocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                ssocket.bind((self.ip, ports.ONLY_NEIGHBOUR_REQUESTS))
+                ssocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
+                ssocket.connect((neighbourIP, ports.NODE_GENERAL_REQUEST_PORT))
                 requestPacket = TcpPacket("BNR") # Best Neighbour Request
                 ssocket.send(pickle.dumps(requestPacket))
                 response = pickle.loads(ssocket.recv(4096))
@@ -305,19 +315,11 @@ class oNode:
                         self.otherNeighbourOption = newNeighbour
                         greenPrint(f"[INFO] Updated otherNeighbourOption: {newNeighbour}")
                 
-                with self.neighboursLock:
-                    if len(self.neighbours) > 1:
-                        onlyOneNeighbour = False
-
-                if onlyOneNeighbour:
-                    time.sleep(ut.BEST_NEIGHBOUR_REQUEST_INTERVAL)
-                else:
-                    with self.requestedOtherNeighbourLock:
-                        self.requestedOtherNeighbour = False
-        except Exception as e:
-            redPrint(f"[ERROR] Failed to request additional neighbours from {neighbourIP}: {e}")
-        finally:
-            ssocket.close()
+            except Exception as e:
+                redPrint(f"[ERROR] Failed to request additional neighbours from {neighbourIP}: {e}")
+            finally:
+                ssocket.close()
+                time.sleep(ut.BEST_NEIGHBOUR_REQUEST_INTERVAL)
     
     def requestVideoFromNeighbour(self, video_id:str) -> None:
         """
