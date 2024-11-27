@@ -37,7 +37,6 @@ class Servidor:
         """
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as lsocket:
-                self.ip = lsocket.getsockname()[0] # FIX: Não pode ser assim, ou passar como argumento ou receber do bootstrapper
                 lsocket.bind((self.ip, ports.NODE_VIDEO_REQUEST_PORT))
                 while True:
                     nodeSocket, addr = lsocket.accept()
