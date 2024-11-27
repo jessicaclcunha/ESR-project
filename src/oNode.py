@@ -211,9 +211,9 @@ class oNode:
         for neighbour in neighbours:
             try:
                 ssocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                ssocket.bind((self.ip, ports.NODE_FLOOD_SENDING_PORT))
                 ssocket.settimeout(2)
                 ssocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
+                ssocket.bind((self.ip, ports.NODE_FLOOD_SENDING_PORT))
                 ssocket.connect((neighbour, ports.NODE_MONITORING_PORT))
                 ssocket.sendall(pickle.dumps(floodPacket))
             except ConnectionRefusedError:
