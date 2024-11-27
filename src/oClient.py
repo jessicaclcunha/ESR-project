@@ -3,6 +3,8 @@ import sys
 import time
 import pickle
 import socket
+from PIL import Image, ImageTk
+import threading
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import utils.time as ut
@@ -119,14 +121,12 @@ class Client:
                     redPrint(f"[ERROR] Error during video request: {e}")
                     break
 
-    # TODO: Process of recieving and displaying the video over UDP/RTP
+    # TODO: Process of recieving and displaying the video over UDP/RTP - confirmar
     
     def receiveVideo(self) -> list:
         """
         Recebe o vídeo como uma sequência de pacotes RTP.
         """
-        import socket
-        frames = []
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_socket:
                 udp_socket.bind((self.ip, ports.UDP_VIDEO_PORT))
@@ -134,10 +134,25 @@ class Client:
                     packet, _ = udp_socket.recvfrom(65536)
                     rtp_packet = RtpPacket()
                     rtp_packet.decode(packet)
-                    frames.append(rtp_packet.getPayload())
+                    
+                    frame_data = rtp_packet.getPayload()
+                    
+                    self.diplayFrame(frame_data)
+                    
         except socket.error as e:
             redPrint(f"[ERROR] RTP socket error: {e}")
-        return frames
+            
+    def diplayFrame(self, frame_data: bytes) -> None:
+        image = Image.open(frame_data)
+        photo = ImageTk.PhotoImage(image)
+        self.label.config(image=photo)
+        
+    def run(self):
+        video_thread = threading.Thread(target=self.receiveVideo)
+        video_thread.daemon = True
+        video_thread.start()
+        
+        
 
 
 if __name__ == "__main__":
@@ -148,6 +163,7 @@ if __name__ == "__main__":
     video = sys.argv[1]
 
     client = Client()
+    client.run()
     client.startClient()
     client.findBestPoP()
     client.requestVideo(video)
