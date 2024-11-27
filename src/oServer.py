@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import pickle
 import socket
 import threading
@@ -13,9 +14,11 @@ from utils.colors import greenPrint, redPrint, greyPrint
 
 class Servidor:
     def __init__(self) -> None:
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.ip = None
         self.neighbours = []
         self.topologyNeighbours = []
+        self.topologyNeighboursLock = threading.Lock()
         self.videos = {} # "IP" : {"Streaming": True/False, "Neighbours": []}
         self.videosLock = threading.Lock()
 
@@ -23,6 +26,7 @@ class Servidor:
         """
         Função responsável por iniciar as threads que executam as funcionalidades do sistema.
         """
+        threading.Thread(target=self.startFlood).start()
         threading.Thread(target=self.nodeRequestManager).start()
         # TODO:
         # Thread para dividir os vídeos em pacates e enviar os mesmos para os vizinhos
@@ -99,17 +103,11 @@ class Servidor:
         """
         Função que inicia o flood da rede para os nós conhecerem o melhor caminho até ao servidor.
         """
-        """
         with self.topologyNeighboursLock:
             topologyNeighbours = self.topologyNeighbours
-        with self.neighboursLock:
-            activeNeighbours = self.neighbours
 
-        neighbours = list(set(topologyNeighbours) | set(activeNeighbours))  # Lista de vizinhos sem repetidos
-        """
-        neighbours = self.neighbours
         ssocket = None
-        for neighbour in neighbours:
+        for neighbour in topologyNeighbours:
             try:
                 ssocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 ssocket.settimeout(2)
@@ -117,6 +115,7 @@ class Servidor:
                 ssocket.bind((self.ip, ports.NODE_PING_PORT))
                 ssocket.connect((neighbour, ports.NODE_MONITORING_PORT))
                 floodPacket = TcpPacket("FLOOD")
+                floodPacket.addData({"ServerTimestamp": time.time(), "hops": 0})
                 ssocket.sendall(pickle.dumps(floodPacket))
             except ConnectionRefusedError:
                 greyPrint(f"[WARN] Neighbour {neighbour} is not up.")
@@ -129,9 +128,32 @@ class Servidor:
                     ssocket.close()
             
     # TODO: Distribuição dos vídeos quando pedido, mas estar sempre a criar os pacotes
+    def registerWithBootstrapper(self) -> None:
+        try:
+            greenPrint(f"[INFO] Server started")
+            greenPrint(f"[INFO] Connecting to Bootstrapper")
+            self.socket.connect((ports.BOOTSTRAPPER_IP, ports.BOOTSTRAPPER_PORT))
+            greenPrint(f"[INFO] Connected to the Bootstrapper")
+
+            packet = TcpPacket("NLR") # NLR = Neighbour List Request
+            self.socket.sendall(pickle.dumps(packet))   # Enviar o IP para receber a lista de vizinhos
+
+            greenPrint(f"[INFO] Requested Neighbour list")
+            response = pickle.loads(self.socket.recv(4096))
+
+            responseDict = response.getData()
+            self.ip = responseDict['IP']
+            greenPrint(f"[DATA] My IP: {self.ip}")
+            with self.topologyNeighboursLock:
+                self.topologyNeighbours = responseDict['Neighbours']
+                greenPrint(f"[DATA] Neighbour list: {self.topologyNeighbours}")
+        except Exception as e:
+            redPrint(f"[ERROR] Failed to register with Bootstrapper: {e}")
+            sys.exit(1)
 
 
 if __name__ == '__main__':
     server = Servidor()
     server.loadVideoList()
+    server.registerWithBootstrapper()
     server.startServer()

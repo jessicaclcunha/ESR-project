@@ -94,9 +94,9 @@ class oNode:
         greenPrint(f"[INFO] Ping Thread started on port {ports.NODE_PING_PORT}")
         while True:
             with self.topologyNeighboursLock:
-                topologyNeighbours = self.topologyNeighbours
+                topologyNeighbours = self.topologyNeighbours.copy()
             with self.neighboursLock:
-                activeNeighbours = self.neighbours
+                activeNeighbours = self.neighbours.copy()
 
             neighbours = list(set(topologyNeighbours) | set(activeNeighbours))  # Lista de vizinhos sem repetidos
             ssocket = None
@@ -166,10 +166,56 @@ class oNode:
                 # TODO: Replace with switchBestNeighour function, that also request the videos it is streaming
                 with self.bestNeighbourLock:
                     self.bestNeighbour = neighbour
-        # TODO: elif messageType == "FLOOD":
-        # retirar o timestamp do servidor, deve vir no campo data["ServerTimestamp"]
-        # adicionar à routingTable[neighbour]["LT"]
+        elif messageType == "FLOOD":
+            greenPrint(f"[INFO] FLOOD Packet received from neighbour {neighbour}")
+            latency = time.time() - packet.getData()["ServerTimestamp"]
+            with self.routingTableLock:
+                self.routingTable[neighbour]["LT"] = latency 
+
+            isBest = False
+            with self.bestNeighbourLock:
+                bestNeighbour = self.bestNeighbour
+            with self.routingTableLock:
+                if latency < self.routingTable[bestNeighbour]["LT"]:
+                    isBest = True
+            if isBest:
+                with self.bestNeighbourLock:
+                    # TODO: Trocar para função switchBestNeighbour
+                    self.bestNeighbour = neighbour
+                data = packet.getData()
+                data["hops"] += 1
+                floodPacket = TcpPacket("FLOOD")
+                floodPacket.addData(data)
+                self.propagateFlood(floodPacket, neighbour)
         # verificar se é o melhor que temos, se for, propagar o FLOOD para os meus vizinhos, menos o que me enviou a mim, neste caso a variável neighbour
+
+    def propagateFlood(self, floodPacket: TcpPacket, originNeighbour: str) -> None:
+        """
+        Função responsável por propagar o FLOOD para os vizinhos, exceto o que mandou o FLOOD.
+
+        :param originNeighbour: IP do vizinho que enviou o FLOOD.
+        """
+        with self.neighboursLock:
+            neighbours = self.neighbours.copy()
+            neighbours.remove(originNeighbour)
+        
+        ssocket = None
+        for neighbour in neighbours:
+            try:
+                ssocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                ssocket.settimeout(2)
+                ssocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
+                ssocket.connect((neighbour, ports.NODE_MONITORING_PORT))
+                ssocket.sendall(pickle.dumps(floodPacket))
+            except ConnectionRefusedError:
+                redPrint(f"[ERROR] Neighbour {originNeighbour} is not up.")
+            except socket.timeout:
+                redPrint(f"[ERROR] Connection to neighbour {originNeighbour} timed out.")
+            except Exception as e:
+                redPrint(f"[ERROR] Failed to send Flood Packet to {originNeighbour}: {e}")
+            finally:
+                if ssocket:
+                    ssocket.close()
 
     def routingTableMonitoring(self) -> None:
         """
@@ -197,7 +243,7 @@ class oNode:
                         self.neighbours.remove(ip)
                     if len(self.neighbours) == 1:
                         onlyOneNeighbour = True
-                    neighbours = self.neighbours
+                    neighbours = self.neighbours.copy()
 
                 noNeighbours = False
                 otherOption = None
