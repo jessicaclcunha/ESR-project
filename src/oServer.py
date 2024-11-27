@@ -26,7 +26,6 @@ class Servidor:
         threading.Thread(target=self.nodeRequestManager).start()
         # TODO:
         # Thread para dividir os vídeos em pacates e enviar os mesmos para os vizinhos
-        pass
 
     def nodeRequestManager(self):
         """
@@ -34,7 +33,7 @@ class Servidor:
         """
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as lsocket:
-                self.ip = lsocket.getsockname()[0]
+                self.ip = lsocket.getsockname()[0] # FIX: Não pode ser assim, ou passar como argumento ou receber do bootstrapper
                 lsocket.bind((self.ip, ports.NODE_VIDEO_REQUEST_PORT))
                 while True:
                     nodeSocket, addr = lsocket.accept()
@@ -77,9 +76,9 @@ class Servidor:
                 if len(self.videos[video_id]["Neighbours"]) == 0:
                     self.videos[video_id]["Streaming"] = False
 
-    def loadVideos(self) -> None:
+    def loadVideoList(self) -> None:
         """
-        Carregar os vídeos do hardware para o servidor.
+        Criar a lista de vídeos do hardware para o servidor.
         """
         videoDirectory = "../videos/"
 
@@ -96,11 +95,43 @@ class Servidor:
         except Exception as e:
             redPrint(f"[ERROR] Failed to load videos: {e}")
 
-    # Estratégia de flood da rede
-    # Distribuição dos vídeos quando pedido, mas estar sempre a criar os pacotes
+    def startFlood(self):
+        """
+        Função que inicia o flood da rede para os nós conhecerem o melhor caminho até ao servidor.
+        """
+        """
+        with self.topologyNeighboursLock:
+            topologyNeighbours = self.topologyNeighbours
+        with self.neighboursLock:
+            activeNeighbours = self.neighbours
+
+        neighbours = list(set(topologyNeighbours) | set(activeNeighbours))  # Lista de vizinhos sem repetidos
+        """
+        neighbours = self.neighbours
+        ssocket = None
+        for neighbour in neighbours:
+            try:
+                ssocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                ssocket.settimeout(2)
+                ssocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
+                ssocket.bind((self.ip, ports.NODE_PING_PORT))
+                ssocket.connect((neighbour, ports.NODE_MONITORING_PORT))
+                floodPacket = TcpPacket("FLOOD")
+                ssocket.sendall(pickle.dumps(floodPacket))
+            except ConnectionRefusedError:
+                greyPrint(f"[WARN] Neighbour {neighbour} is not up.")
+            except socket.timeout:
+                redPrint(f"[ERROR] Connection to neighbour {neighbour} timed out.")
+            except Exception as e:
+                redPrint(f"[ERROR] Failed to send Flood Packet to {neighbour}: {e}")
+            finally:
+                if ssocket:
+                    ssocket.close()
+            
+    # TODO: Distribuição dos vídeos quando pedido, mas estar sempre a criar os pacotes
 
 
 if __name__ == '__main__':
     server = Servidor()
-    server.loadVideos()
+    server.loadVideoList()
     server.startServer()
