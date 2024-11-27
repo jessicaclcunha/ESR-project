@@ -41,7 +41,7 @@ class Servidor:
                 lsocket.bind((self.ip, ports.NODE_VIDEO_REQUEST_PORT))
                 while True:
                     nodeSocket, addr = lsocket.accept()
-                    nodeRequestHandler = threading.Thread(target=self.nodeRequestHandler, args=(nodeSocket, addr))
+                    nodeRequestHandler = threading.Thread(target=self.nodeRequestHandler, args=(nodeSocket, addr,))
                     nodeRequestHandler.start()
         except KeyboardInterrupt:
             redPrint("[SHUTDOWN] Shutting down server...")

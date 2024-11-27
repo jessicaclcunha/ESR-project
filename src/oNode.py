@@ -161,7 +161,7 @@ class oNode:
                     if len(self.neighbours) == 1:
                         onlyNeighbour = True
                 with self.routingTableLock:
-                    self.routingTable[neighbour]["LS"] = time.time()
+                    self.routingTable[neighbour] = {"LT":float("inf"), "LS":time.time()}
             if onlyNeighbour:
                 # TODO: Replace with switchBestNeighour function, that also request the videos it is streaming
                 with self.bestNeighbourLock:
@@ -170,7 +170,12 @@ class oNode:
             greenPrint(f"[INFO] FLOOD Packet received from neighbour {neighbour}")
             latency = time.time() - packet.getData()["ServerTimestamp"]
             with self.routingTableLock:
+                if neighbour not in self.routingTable.keys():
+                    self.routingTable[neighbour] = {"LT": latency, "LS": time.time()}
                 self.routingTable[neighbour]["LT"] = latency 
+            with self.neighboursLock:
+                if neighbour not in self.neighbours:
+                    self.neighbours.append(neighbour)
 
             isBest = False
             with self.bestNeighbourLock:
@@ -203,6 +208,7 @@ class oNode:
         for neighbour in neighbours:
             try:
                 ssocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                ssocket.bind((self.ip, ports.NODE_MONITORING_PORT))
                 ssocket.settimeout(2)
                 ssocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
                 ssocket.connect((neighbour, ports.NODE_MONITORING_PORT))
