@@ -178,7 +178,7 @@ class oNode:
                         onlyNeighbour = True
                 with self.routingTableLock:
                     latencyNeighbourToPoP = packet.getData().get("Latency", float('inf'))
-                    latency = latencyNeighbourToPoP + (packet.getTimestamp() - time.time())
+                    latency = latencyNeighbourToPoP + (time.time() - packet.getTimestamp())
                     greenPrint(f"[DATA] Latency to neighbour {neighbour}: {latency}")
                     if neighbour not in self.routingTable.keys():
                         # TODO: Send and recieve number of hops too
