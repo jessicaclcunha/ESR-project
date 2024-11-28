@@ -169,6 +169,7 @@ class oNode:
                 with self.routingTableLock:
                     latencyNeighbourToPoP = packet.getData().get("Latency", float('inf'))
                     latency = latencyNeighbourToPoP + (packet.getTimestamp() - time.time())
+                    greenPrint(f"[DATA] Latency to neighbour {neighbour}: {latency}")
                     if neighbour not in self.routingTable.keys():
                         # TODO: Send and recieve number of hops too
                         self.routingTable[neighbour] = {"LT": latency,"LS":time.time(), "hops": 2**31-1}
@@ -280,6 +281,11 @@ class oNode:
             if startThread:
                 threading.Thread(target=self.requestAdditionalNeighbours).start()
                  
+                # TODO: DEBUG, depois remover
+            with self.bestNeighbourLock:
+                redPrint(f"[DATA] Best neighbour: {self.bestNeighbour}")
+            with self.routingTableLock:
+                redPrint(f"[DATA] Routing Table: {self.routingTable}")
             time.sleep(ut.NODE_ROUTING_TABLE_MONITORING_INTERVAL)
 
     def switchBestNeighbour(self, newBestNeighbourIP: str) -> None:
@@ -287,6 +293,7 @@ class oNode:
         Função responsável por trocar o melhor vizinho e requisitar os vídeos necessários.
         """
         # TODO: Enviar SVR para o antigo melhor vizinho, caso o mesmo esteja ativo ainda
+        # SVR no campo data contém lista de vídeos, e não um só vídeo
         bestNeighbourActive = True 
         empty = False
         if newBestNeighbourIP != "":
@@ -411,6 +418,8 @@ class oNode:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ssocket:
                 ssocket.connect((neighbourIP, ports.NODE_VIDEO_REQUEST_PORT))
                 videoRequestPacket = TcpPacket("VR")  # Video Request 
+                # TODO: Mudar para uma lista de videos, e não só um
+                # Facilita o processo de troca de bestNeighbour
                 videoRequestPacket.addData({"video_id": video_id})
                 ssocket.send(pickle.dumps(videoRequestPacket))
                 greenPrint(f"[INFO] Requested video {video_id} from {neighbourIP}")
@@ -426,6 +435,7 @@ class oNode:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ssocket:
                 ssocket.connect((neighbourIP, ports.NODE_VIDEO_REQUEST_PORT))
                 videoRequestPacket = TcpPacket("SVR")  # Stop Video Request
+                # TODO: Mudar para uma lista de vídeos, e não só um
                 videoRequestPacket.addData({"video_id": video_id})
                 ssocket.send(pickle.dumps(videoRequestPacket))
                 greenPrint(f"[INFO] Requested to stop recieving the video {video_id} from {neighbourIP}")
