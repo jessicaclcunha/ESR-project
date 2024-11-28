@@ -262,7 +262,9 @@ class oNode:
 
             noNeighbours = len(neighbours) == 0
             bestActiveNeighbour = self.determineBestNeighbour()
-            newBestNeighbour = bestActiveNeighbour != self.getBestNeighbour()
+            with self.bestNeighbourLock:
+                currentBestNeighbour = self.bestNeighbour
+            newBestNeighbour = bestActiveNeighbour != currentBestNeighbour
             if newBestNeighbour:
                 self.switchBestNeighbour(bestActiveNeighbour)
             elif noNeighbours:
