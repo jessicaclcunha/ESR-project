@@ -24,7 +24,7 @@ class oNode:
         self.neighboursLock = threading.Lock()
         self.topologyNeighbours = [] # Lista de vizinhos da topologia
         self.topologyNeighboursLock = threading.Lock()
-        self.otherNeighbourOption = None # Em caso de falha dos vizinhos
+        self.otherNeighbourOption = "" # Em caso de falha dos vizinhos
         self.otherNeighbourLock = threading.Lock()
         self.requestedOtherNeighbour = False
         self.requestedOtherNeighbourLock = threading.Lock()
@@ -248,28 +248,24 @@ class oNode:
             for ip in neighboursToRemove:
                 with self.routingTableLock:
                     self.routingTable.pop(ip, None)
-
                 with self.neighboursLock:
                     if ip in self.neighbours:
                         self.neighbours.remove(ip)
-                    if len(self.neighbours) == 1:
-                        onlyOneNeighbour = True
-                    neighbours = self.neighbours.copy()
-
-                noNeighbours = False
-                otherOption = None
-                if not neighbours:
-                    noNeighbours = True
-                with self.otherNeighbourLock:
-                    otherOption = self.otherNeighbourOption
-                with self.bestNeighbourLock:
-                    if noNeighbours and otherOption is not None:
-                        self.switchBestNeighbour(otherOption)
-                    elif noNeighbours and otherOption is None:
-                        self.switchBestNeighbour("")
-                    elif self.bestNeighbour not in neighbours:
-                        self.switchBestNeighbour("")
                 redPrint(f"[WARN] Neighbor {ip} removed due to timeout")
+
+            neighbours = []
+            with self.neighboursLock:
+                if len(self.neighbours) == 1:
+                    onlyOneNeighbour = True
+                neighbours = self.neighbours.copy()
+
+            noNeighbours = len(neighbours) == 0
+            bestActiveNeighbour = self.determineBestNeighbour()
+            newBestNeighbour = bestActiveNeighbour != self.getBestNeighbour()
+            if newBestNeighbour:
+                self.switchBestNeighbour(bestActiveNeighbour)
+            elif noNeighbours:
+                self.switchBestNeighbour("")
 
             with self.requestedOtherNeighbourLock:
                 if onlyOneNeighbour and not self.requestedOtherNeighbour:
@@ -287,14 +283,20 @@ class oNode:
         """
         bestNeighbourActive = True 
         empty = False
-        if newBestNeighbourIP == "":
+        if newBestNeighbourIP != "":
             with self.neighboursLock:
                 empty = len(self.neighbours) == 0
                 bestNeighbourActive = newBestNeighbourIP in self.neighbours
+        with self.otherNeighbourLock:
+            otherNeighbour = self.otherNeighbourOption
         with self.bestNeighbourLock:
             if empty:
-                self.bestNeighbour = ""
-                redPrint("[ERROR] No neighbours available.")
+                if otherNeighbour != "":
+                    self.bestNeighbour = otherNeighbour
+                    greenPrint(f"[INFO] New best neighbour: {self.bestNeighbour}")
+                else:
+                    self.bestNeighbour = ""
+                    redPrint("[ERROR] No neighbours available.")
             elif not bestNeighbourActive:
                 self.bestNeighbour = self.determineBestNeighbour()
                 greenPrint(f"[INFO] New best neighbour: {self.bestNeighbour}")
