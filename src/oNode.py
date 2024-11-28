@@ -326,7 +326,8 @@ class oNode:
         for video in videoListToRequest:
             self.requestVideoFromNeighbour(video)
 
-        bestNeighbourIP = self.getBestNeighbour()
+        with self.bestNeighbourLock:
+            bestNeighbourIP = self.bestNeighbour
         currentLatency = float("inf")
         with self.routingTableLock:
             currentLatency = self.routingTable[bestNeighbourIP]["LT"]
@@ -536,7 +537,7 @@ class oNode:
         Função que envia o melhor vizinho atual do Node.
         """
         response = TcpPacket("R")
-        bestNeighbour = self.getBestNeighbour()
+        bestNeighbour = self.getBestNeighbour()  # TODO: Verificar se uso getBestNeighbour (??) ou se envio mesmo o self.bestNeighbour <-
         response.addData({"BestNeighbour": bestNeighbour})
         nodeSocket.sendall(pickle.dumps(response))
         nodeSocket.close()
