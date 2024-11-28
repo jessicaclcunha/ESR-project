@@ -151,7 +151,7 @@ class Servidor:
                 ssocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 ssocket.settimeout(2)
                 ssocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
-                ssocket.bind((self.ip, ports.NODE_PING_PORT))
+                ssocket.bind((self.ip, ports.NODE_FLOOD_SENDING_PORT))
                 ssocket.connect((neighbour, ports.NODE_MONITORING_PORT))
                 floodPacket = TcpPacket("FLOOD")
                 floodPacket.addData({"ServerTimestamp": time.time(), "hops": 0})

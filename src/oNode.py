@@ -284,6 +284,7 @@ class oNode:
         """
         Função responsável por trocar o melhor vizinho e requisitar os vídeos necessários.
         """
+        # TODO: Enviar SVR para o antigo melhor vizinho, caso o mesmo esteja ativo ainda
         bestNeighbourActive = True 
         empty = False
         if newBestNeighbourIP != "":
