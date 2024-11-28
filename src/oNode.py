@@ -207,7 +207,7 @@ class oNode:
         """
         with self.neighboursLock:
             neighbours = self.neighbours.copy()
-            neighbours.remove(originNeighbour)
+        neighbours.remove(originNeighbour)
         
         ssocket = None
         for neighbour in neighbours:
@@ -313,9 +313,10 @@ class oNode:
         for video in videoListToRequest:
             self.requestVideoFromNeighbour(video)
 
+        bestNeighbourIP = self.getBestNeighbour()
         currentLatency = float("inf")
         with self.routingTableLock:
-            currentLatency = self.routingTable[newBestNeighbourIP]["LT"]
+            currentLatency = self.routingTable[bestNeighbourIP]["LT"]
         with self.latencyLock:
             self.latency = currentLatency
 
