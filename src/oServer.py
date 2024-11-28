@@ -19,9 +19,10 @@ class Servidor:
         self.neighbours = []
         self.neighboursLock = threading.Lock()
         self.topologyNeighbours = []
-        self.topologyNeighboursLock = threading.Lock()
         self.videos = {} # "IP" : {"Streaming": True/False, "Neighbours": []}
         self.videosLock = threading.Lock()
+        self.video_threads = {} # Threads de transmissão de vídeos
+        #self.video_clientes = {} # Clientes conectados a vídeo
 
     def startServer(self) -> None:
         """
@@ -69,19 +70,67 @@ class Servidor:
         Função responsável por lidar com os pedidos de vídeo dos vizinhos.
         """
         with self.videosLock:
-            if video_id in self.videos.keys():
-                self.videos[video_id]["Streaming"] = True
+            if video_id not in self.videos:
+                redPrint(f"[ERROR] Vídeo {video_id} não está disponível.")
+                return
+            
+            #Adicionar o cliente à lista de espectadores
+            if nodeAddress not in self.videos[video_id]["Neighbours"]:
                 self.videos[video_id]["Neighbours"].append(nodeAddress)
-    
+                greenPrint(f"[INFO] Cliente {nodeAddress} conectado ao vídeo {video_id}.")
+
+            #Inicia a thread de transmissão (SE NÃO ESTIVER JÁ A TRANSMITIR)
+                if video_id not in self.video_threads:
+                    self.videos[video_id]["Streaming"] = True
+                    self.video_threads[video_id] = threading.Thread(target = self.streamVideo, args = (video_id))
+                    self.video_threads[video_id].start()
+                    greenPrint(f"[INFO] Transmissão de {video_id} iniciada.")
+            
+    def streamVideo (self, video_id: str) -> None:
+        """
+        Transmite continuamente os pacotes de vídeo
+        """
+        video_path = f"../videos/{video_id}"
+        if not os.path.exists(video_path):
+            redPrint(f"[ERROR] Arquivo {video_path} não existe/não encontrado.")
+            return
+        
+        try:
+            stream = VideoStream(video_path)
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_socket:
+                while True:
+                    frame = stream.nextFrame()
+                    if not frame:  # Reinicia o vídeo ao atingir o final
+                        stream.file.seek(0)
+                        stream.frameNum = 0
+                        frame = stream.nextFrame()
+                    
+                    #Envia os pacotes APENAR para os clientes logados/conectados
+                    with self.videosLock:
+                        clients = self.videos[video_id]["Neighbours"]
+                        if clients:
+                            timestamp = f"{int(ut.current_time_ms())}".encode("utf-8")
+                        for client in clients:
+                            try:
+                                udp_socket.sendto(timestamp + frame, client)
+                            except Exception as e:
+                                redPrint(f"[ERROR] Falha ao enviar para {client}: {e}")
+
+                    ut.sleep_ms(40)  # Intervalo entre pacotes
+                                
+        except Exception as e:
+            redPrint(f"[ERRO] Failed to open the video file {e}")
+
     def handleStopVideoRequest(self, nodeAddress: Tuple[str, int], video_id: str) -> None:
         """
-        Função responsável por lidar com os pedidos de paragem de video dos vizinhos.
+        Gere pedidos de vídeo, adicionando o cliente à lista de espectadores.
         """
         with self.videosLock:
             if video_id in self.videos.keys():
                 self.videos[video_id]["Neighbours"].remove(nodeAddress)
                 if len(self.videos[video_id]["Neighbours"]) == 0:
                     self.videos[video_id]["Streaming"] = False
+                    greenPrint(f"[INFO] Transmissão de {video_id} terminada.") 
 
     def neighbourPingSender(self) -> None:
         """
