@@ -3,20 +3,22 @@ import sys
 import time
 import pickle
 import socket
-#from PIL import Image, ImageTk
 import threading
+import tkinter as tkinter
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import utils.time as ut
 import utils.ports as ports
 from packets.TcpPacket import TcpPacket
 from packets.RtpPacket import RtpPacket
+import ClienteGUI as cg
 from utils.colors import greenPrint, redPrint, greyPrint
 
 
 class Client:
-    def __init__(self):
+    def __init__(self, video:str) -> None: 
         self.ip = None
+        self.video = video
         self.popList = []
         self.bestPoP = None
 
@@ -39,6 +41,18 @@ class Client:
                 packetData = packet.getData()
                 self.popList = packetData["PoPList"] or []
                 greenPrint(f"[DATA] PoP list: {self.popList}")
+                
+                ## display
+                r = tkinter.Tk()
+                r.title({self.video}) # video_id
+                try:
+                    gui = cg.ClientGUI(r, self.ip, ports.DISPLAY_PORT)
+                    r.mainloop()
+                finally:
+                    greenPrint(f"[INFO] Video a terminar.")
+                    
+                    # TODO: Mandar mensagem de paragem de vídeo
+                
 
         except ConnectionRefusedError:
             redPrint(f"[ERROR] Could not connect to the Bootstrapper")
@@ -91,15 +105,15 @@ class Client:
                 greyPrint(f"[WARN] No valid latencies received. Trying again in {ut.CLIENT_NO_POP_WAIT_TIME} seconds.")
                 time.sleep(ut.CLIENT_NO_POP_WAIT_TIME)
 
-    def requestVideo(self, video:str) -> None:
+    def requestVideo(self) -> None:
         """
         Função que realiza o pedido do vídeo ao melhor PoP.
         """
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sUDPsocket:
             sUDPsocket.settimeout(2)
-            greenPrint(f"[INFO] Requesting video {video} to {self.bestPoP}")
+            greenPrint(f"[INFO] Requesting video {self.video} to {self.bestPoP}")
             packet = TcpPacket("VR")
-            data = { 'video_id' : video }
+            data = { 'video_id' : self.video }
             packet.addData(data)
             serializedPacket = pickle.dumps(packet)
 
@@ -142,18 +156,6 @@ class Client:
         except socket.error as e:
             redPrint(f"[ERROR] RTP socket error: {e}")
             
-    def diplayFrame(self, frame_data: bytes) -> None:
-        #image = Image.open(frame_data)
-        #photo = ImageTk.PhotoImage(image)
-        self.label.config(image=photo)
-        self.label.image = photo
-        
-    def run(self):
-        video_thread = threading.Thread(target=self.receiveVideo)
-        video_thread.daemon = True
-        video_thread.start()
-        self.master.mainloop()
-
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
@@ -162,8 +164,7 @@ if __name__ == "__main__":
 
     video = sys.argv[1]
 
-    client = Client()
-    #client.run()
+    client = Client(video)
     client.startClient()
     client.findBestPoP()
-    client.requestVideo(video)
+    client.requestVideo()

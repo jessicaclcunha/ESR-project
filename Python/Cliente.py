@@ -1,6 +1,6 @@
 import sys
 from tkinter import Tk
-from ClienteGUI import ClienteGUI
+from src.ClienteGUI import ClienteGUI
 
 if __name__ == "__main__":
 	try:
