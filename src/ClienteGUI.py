@@ -1,8 +1,13 @@
+import os
+import sys
+import socket
+import threading
+
 from tkinter import *
 import tkinter.messagebox as tkMessageBox
 from PIL import Image, ImageTk
-import socket, threading, sys, traceback, os
 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from packets.RtpPacket import RtpPacket
 
 CACHE_FILE_NAME = "cache-"
