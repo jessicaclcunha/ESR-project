@@ -9,6 +9,7 @@ from typing import Tuple
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import utils.time as ut
 import utils.ports as ports
+import utils.VideoStream as VideoStream
 from packets.TcpPacket import TcpPacket
 from utils.colors import greenPrint, redPrint, greyPrint
 
@@ -19,6 +20,7 @@ class Servidor:
         self.neighbours = []
         self.neighboursLock = threading.Lock()
         self.topologyNeighbours = []
+        self.topologyNeighboursLock = threading.Lock()
         self.videos = {} # "IP" : {"Streaming": True/False, "Neighbours": []}
         self.videosLock = threading.Lock()
         self.video_threads = {} # Threads de transmissão de vídeos
@@ -96,7 +98,7 @@ class Servidor:
             return
         
         try:
-            stream = VideoStream(video_path)
+            stream = VideoStream.VideoStream(video_path)
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_socket:
                 while True:
                     frame = stream.nextFrame()
@@ -108,16 +110,15 @@ class Servidor:
                     #Envia os pacotes APENAR para os clientes logados/conectados
                     with self.videosLock:
                         clients = self.videos[video_id]["Neighbours"]
-                        if clients:
-                            timestamp = f"{int(ut.current_time_ms())}".encode("utf-8")
+                    if clients:
                         for client in clients:
+                            timestamp = f"{time.time()}".encode("utf-8")
                             try:
                                 udp_socket.sendto(timestamp + frame, client)
                             except Exception as e:
                                 redPrint(f"[ERROR] Falha ao enviar para {client}: {e}")
 
-                    ut.sleep_ms(40)  # Intervalo entre pacotes
-                                
+                    time.sleep(0.04)  # Intervalo entre pacotes
         except Exception as e:
             redPrint(f"[ERRO] Failed to open the video file {e}")
 
