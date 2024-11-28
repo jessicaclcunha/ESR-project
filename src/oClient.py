@@ -42,16 +42,19 @@ class Client:
                 self.popList = packetData["PoPList"] or []
                 greenPrint(f"[DATA] PoP list: {self.popList}")
                 
-                ## display
+                # display
                 r = tkinter.Tk()
-                r.title({self.video}) # video_id
+                r.title(self.video) # video_id
                 try:
-                    gui = cg.ClientGUI(r, self.ip, ports.DISPLAY_PORT)
+                    cg.ClientGUI(r, self.ip, ports.DISPLAY_PORT)
                     r.mainloop()
                 finally:
                     greenPrint(f"[INFO] Video a terminar.")
                     
                     # TODO: Mandar mensagem de paragem de vídeo
+                    stop_message = TcpPacket("STOP_VIDEO")
+                    ssocket.sendall(pickle.dumps(stop_message))
+                    greenPrint(f"[INFO] Sent stop video message")
                 
 
         except ConnectionRefusedError:
