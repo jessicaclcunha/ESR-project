@@ -3,7 +3,7 @@ import sys
 import time
 import pickle
 import socket
-from PIL import Image, ImageTk
+#from PIL import Image, ImageTk
 import threading
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -29,8 +29,8 @@ class Client:
             
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ssocket:
-                self.ip = ssocket.getsockname()[0]
                 ssocket.connect((ports.BOOTSTRAPPER_IP, ports.BOOTSTRAPPER_PORT))
+                self.ip = ssocket.getsockname()[0]
                 greenPrint(f"[INFO] Connected to the Bootstrapper")
                 message = TcpPacket("PLR")  # PLR = PoP List Request
                 ssocket.sendall(pickle.dumps(message))
@@ -143,8 +143,8 @@ class Client:
             redPrint(f"[ERROR] RTP socket error: {e}")
             
     def diplayFrame(self, frame_data: bytes) -> None:
-        image = Image.open(frame_data)
-        photo = ImageTk.PhotoImage(image)
+        #image = Image.open(frame_data)
+        #photo = ImageTk.PhotoImage(image)
         self.label.config(image=photo)
         self.label.image = photo
         
@@ -163,7 +163,7 @@ if __name__ == "__main__":
     video = sys.argv[1]
 
     client = Client()
-    client.run()
+    #client.run()
     client.startClient()
     client.findBestPoP()
     client.requestVideo(video)
