@@ -44,7 +44,7 @@ class Client:
                 
                 ## display
                 r = tkinter.Tk()
-                r.title({self.video}) # video_id
+                r.title(self.video) # video_id
                 try:
                     gui = cg.ClientGUI(r, self.ip, ports.DISPLAY_PORT)
                     r.mainloop()
@@ -137,7 +137,7 @@ class Client:
 
     # TODO: Process of recieving and displaying the video over UDP/RTP - confirmar
     
-    def receiveVideo(self) -> list:
+    def receiveVideo(self) -> None:
         """
         Recebe o vídeo como uma sequência de pacotes RTP.
         """
@@ -149,9 +149,9 @@ class Client:
                     rtp_packet = RtpPacket()
                     rtp_packet.decode(packet)
                     
-                    frame_data = rtp_packet.getPayload()
+                    # frame_data = rtp_packet.getPayload()
                     
-                    self.diplayFrame(frame_data)
+                    # self.diplayFrame(frame_data)
                     
         except socket.error as e:
             redPrint(f"[ERROR] RTP socket error: {e}")
