@@ -17,6 +17,9 @@ class oNode:
     def __init__(self) -> None:
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.ip = None
+        # TODO: Maybe muda self.latency para self.connectionInfo = {"LT":, "hops":}, etc.
+        self.latency = float("inf")  # Tempo de latência do Node até ao Servidor
+        self.latencyLock = threading.Lock()
         self.neighbours = [] # Vizinhos ativos
         self.neighboursLock = threading.Lock()
         self.topologyNeighbours = [] # Lista de vizinhos da topologia
@@ -30,7 +33,7 @@ class oNode:
         self.isPoP = False
         self.streamedVideos = {} # "IP" : {"Streaming": True/False, "Neighbours": []}
         self.streamedVideosLock = threading.Lock()
-        self.bestNeighbour = None
+        self.bestNeighbour = ""
         self.bestNeighbourLock = threading.Lock()
 
     def clientConnectionManager(self):
@@ -108,6 +111,9 @@ class oNode:
                     ssocket.bind((self.ip, ports.NODE_PING_PORT))
                     ssocket.connect((neighbourIP, ports.NODE_MONITORING_PORT))
                     helloPacket = TcpPacket("HP")
+                    with self.latencyLock:
+                        data = {"Latency": self.latency}
+                    helloPacket.addData(data)
                     ssocket.send(pickle.dumps(helloPacket))
                 except ConnectionRefusedError:
                     greyPrint(f"[WARN] Neighbour {neighbourIP} is not up.")
@@ -161,14 +167,14 @@ class oNode:
                     if len(self.neighbours) == 1:
                         onlyNeighbour = True
                 with self.routingTableLock:
+                    latency = packet.getData()("Latency", float('inf'))
                     if neighbour not in self.routingTable.keys():
-                        self.routingTable[neighbour] = {"LT":float("inf"), "LS":time.time(), "hops": 2**31-1}
+                        self.routingTable[neighbour] = {"LT": latency,"LS":time.time(), "hops": 2**31-1}
                     else:
+                        self.routingTable[neighbour]["LT"] = latency
                         self.routingTable[neighbour]["LS"] = time.time()
             if onlyNeighbour:
-                # TODO: Replace with switchBestNeighour function, that also request the videos it is streaming
-                with self.bestNeighbourLock:
-                    self.bestNeighbour = neighbour
+                self.switchBestNeighbour(neighbour)
         elif messageType == "FLOOD":
             latency = time.time() - packet.getData()["ServerTimestamp"]
             hops = packet.getData()["hops"]
@@ -180,17 +186,13 @@ class oNode:
                     self.neighbours.append(neighbour)
 
             isBest = False
-            with self.bestNeighbourLock:
-                bestNeighbour = self.bestNeighbour
+            bestNeighbour = self.getBestNeighbour()
             with self.routingTableLock:
                 if latency <= self.routingTable[bestNeighbour]["LT"]:
                     isBest = True
-                    print("best")
-                print(self.routingTable)
+                print(self.routingTable)  # TODO: Debug, eliminar ou meter um print mais bonito
             if isBest:
-                with self.bestNeighbourLock:
-                    # TODO: Trocar para função switchBestNeighbour
-                    self.bestNeighbour = neighbour
+                self.switchBestNeighbour(neighbour)
                 data = packet.getData()
                 data["hops"] += 1
                 floodPacket = TcpPacket("FLOOD")
@@ -262,14 +264,11 @@ class oNode:
                     otherOption = self.otherNeighbourOption
                 with self.bestNeighbourLock:
                     if noNeighbours and otherOption is not None:
-                        self.bestNeighbour = otherOption
-                        greenPrint(f"[INFO] New best neighbour: {self.bestNeighbour}")
+                        self.switchBestNeighbour(otherOption)
                     elif noNeighbours and otherOption is None:
-                        self.bestNeighbour = None
-                        redPrint(f"[INFO] No neighbour available.")
+                        self.switchBestNeighbour("")
                     elif self.bestNeighbour not in neighbours:
-                        self.bestNeighbour = neighbours[0]  # Change to find best neighbour in terms of latency
-                        greenPrint(f"[INFO] New best neighbour: {self.bestNeighbour}")
+                        self.switchBestNeighbour("")
                 redPrint(f"[WARN] Neighbor {ip} removed due to timeout")
 
             with self.requestedOtherNeighbourLock:
@@ -281,7 +280,74 @@ class oNode:
                 threading.Thread(target=self.requestAdditionalNeighbours).start()
                  
             time.sleep(ut.NODE_ROUTING_TABLE_MONITORING_INTERVAL)
-                
+
+    def switchBestNeighbour(self, newBestNeighbourIP: str) -> None:
+        """
+        Função responsável por trocar o melhor vizinho e requisitar os vídeos necessários.
+        """
+        bestNeighbourActive = True 
+        empty = False
+        if newBestNeighbourIP == "":
+            with self.neighboursLock:
+                empty = len(self.neighbours) == 0
+                bestNeighbourActive = newBestNeighbourIP in self.neighbours
+        with self.bestNeighbourLock:
+            if empty:
+                self.bestNeighbour = ""
+                redPrint("[ERROR] No neighbours available.")
+            elif not bestNeighbourActive:
+                self.bestNeighbour = self.determineBestNeighbour()
+                greenPrint(f"[INFO] New best neighbour: {self.bestNeighbour}")
+            else:
+                self.bestNeighbour = newBestNeighbourIP
+
+        videoListToRequest = []
+        with self.streamedVideosLock:
+            for video, info in self.streamedVideos.items():
+                if info["Streaming"]:
+                    videoListToRequest.append(video)
+
+        for video in videoListToRequest:
+            self.requestVideoFromNeighbour(video)
+
+        currentLatency = float("inf")
+        with self.routingTableLock:
+            currentLatency = self.routingTable[newBestNeighbourIP]["LT"]
+        with self.latencyLock:
+            self.latency = currentLatency
+
+    def determineBestNeighbour(self) -> str:
+        """
+        Função responsável por encontrar o melhor vizinho, dada a nossa tabela de routing.
+        Parâmetros mais importantes: Latência, Saltos
+
+        :returns: IP do melhor vizinho
+        """
+        # TODO: Maybe contar o número de saltos, se a latência estiver entre x%
+        minLatency = float("inf")
+        bestNeighbour = ""
+        with self.routingTableLock:
+            for neighbour, info in self.routingTable.items():
+                if info["LT"] < minLatency:
+                    minLatency = info["LT"]
+                    bestNeighbour = neighbour
+        return bestNeighbour
+    
+    def getBestNeighbour(self) -> str:
+        """
+        Função que retorna o melhor vizinho atual do Node.
+        Se não houver vizinho disponível, aguarda um intervalo de tempo.
+
+        :returns: IP do melhor vizinho
+        """
+        bestNeighbour:str = ""
+        while bestNeighbour == "":
+            with self.bestNeighbourLock:
+                if self.bestNeighbour != "":
+                    bestNeighbour = self.bestNeighbour
+                    return bestNeighbour
+            greyPrint(f"[WARN] No neighbour available. Trying again in {ut.NODE_NO_NEIGHBOUR_WAIT_TIME} seconds.")
+            time.sleep(ut.NODE_NO_NEIGHBOUR_WAIT_TIME)
                 
     def requestAdditionalNeighbours(self) -> None:
         """
@@ -299,9 +365,7 @@ class oNode:
                     self.requestedOtherNeighbour = False
                 break
 
-            with self.bestNeighbourLock:
-                # neighbourIP = self.neighbours[0]
-                neighbourIP = self.bestNeighbour
+            neighbourIP = self.getBestNeighbour()
             ssocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:
                 ssocket.bind((self.ip, ports.ONLY_NEIGHBOUR_REQUESTS))
@@ -331,14 +395,7 @@ class oNode:
         """
         Solicita o video ao melhor vizinho.
         """
-        neighbourIP = None
-        while neighbourIP is None:
-            with self.bestNeighbourLock:
-                if self.bestNeighbour is not None:
-                    neighbourIP = self.bestNeighbour
-            if neighbourIP is None:
-                greyPrint(f"[WARN] No neighbour available. Trying again in {ut.NODE_NO_NEIGHBOUR_WAIT_TIME} seconds.")
-                time.sleep(ut.NODE_NO_NEIGHBOUR_WAIT_TIME)
+        neighbourIP = self.getBestNeighbour()
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ssocket:
                 ssocket.connect((neighbourIP, ports.NODE_VIDEO_REQUEST_PORT))
@@ -353,14 +410,7 @@ class oNode:
         """
         Solicita a paragem da stream do video ao melhor vizinho.
         """
-        neighbourIP = None
-        while neighbourIP is None:
-            with self.bestNeighbourLock:
-                if self.bestNeighbour is not None:
-                    neighbourIP = self.bestNeighbour
-            if neighbourIP is None:
-                greyPrint(f"[WARN] No neighbour available. Trying again in {ut.NODE_NO_NEIGHBOUR_WAIT_TIME} seconds.")
-                time.sleep(ut.NODE_NO_NEIGHBOUR_WAIT_TIME)
+        neighbourIP = self.getBestNeighbour()
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ssocket:
                 ssocket.connect((neighbourIP, ports.NODE_VIDEO_REQUEST_PORT))
@@ -465,8 +515,7 @@ class oNode:
         Função que envia o melhor vizinho atual do Node.
         """
         response = TcpPacket("R")
-        with self.bestNeighbourLock:
-            bestNeighbour = self.bestNeighbour
+        bestNeighbour = self.getBestNeighbour()
         response.addData({"BestNeighbour": bestNeighbour})
         nodeSocket.sendall(pickle.dumps(response))
         nodeSocket.close()

@@ -17,6 +17,7 @@ class Servidor:
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.ip = None
         self.neighbours = []
+        self.neighboursLock = threading.Lock()
         self.topologyNeighbours = []
         self.topologyNeighboursLock = threading.Lock()
         self.videos = {} # "IP" : {"Streaming": True/False, "Neighbours": []}
@@ -27,6 +28,7 @@ class Servidor:
         Função responsável por iniciar as threads que executam as funcionalidades do sistema.
         """
         threading.Thread(target=self.startFlood).start()
+        threading.Thread(target=self.neighbourPingSender).start()
         threading.Thread(target=self.nodeRequestManager).start()
         # TODO:
         # Thread para dividir os vídeos em pacates e enviar os mesmos para os vizinhos
@@ -54,6 +56,7 @@ class Servidor:
         packet = pickle.loads(nodeSocket.recv(4096)) 
         greenPrint(f"[INFO] Message received: {packet.getMessageType()} from {nodeAddress[0]}")
         messageType = packet.getMessageType()
+        # TODO: Check if the neighbour is already in the list, if not add it
         
         if messageType == "VR":  # Video Request
             self.handleVideoRequest(nodeAddress, packet.getData().get("video_id", ""))
@@ -78,6 +81,40 @@ class Servidor:
                 self.videos[video_id]["Neighbours"].remove(nodeAddress)
                 if len(self.videos[video_id]["Neighbours"]) == 0:
                     self.videos[video_id]["Streaming"] = False
+
+    def neighbourPingSender(self) -> None:
+        """
+        Função responsável por enviar Hello Packets periodicamente aos vizinhos.
+        """
+        greenPrint(f"[INFO] Ping Thread started on port {ports.NODE_PING_PORT}")
+        while True:
+            with self.topologyNeighboursLock:
+                topologyNeighbours = self.topologyNeighbours.copy()
+            with self.neighboursLock:
+                activeNeighbours = self.neighbours.copy()
+
+            neighbours = list(set(topologyNeighbours) | set(activeNeighbours))  # Lista de vizinhos sem repetidos
+            ssocket = None
+            for neighbourIP in neighbours:
+                try:
+                    ssocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    ssocket.settimeout(2)
+                    ssocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
+                    ssocket.bind((self.ip, ports.NODE_PING_PORT))
+                    ssocket.connect((neighbourIP, ports.NODE_MONITORING_PORT))
+                    helloPacket = TcpPacket("HP")
+                    ssocket.send(pickle.dumps(helloPacket))
+                except ConnectionRefusedError:
+                    greyPrint(f"[WARN] Neighbour {neighbourIP} is not up.")
+                except socket.timeout:
+                    redPrint(f"[ERROR] Connection to neighbour {neighbourIP} timed out.")
+                except Exception as e:
+                    redPrint(f"[ERROR] Failed to send Hello Packet to {neighbourIP}: {e}")
+                finally:
+                    if ssocket:
+                        ssocket.close()
+            time.sleep(ut.NODE_PING_INTERVAL)
+
 
     def loadVideoList(self) -> None:
         """
