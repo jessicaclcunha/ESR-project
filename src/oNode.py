@@ -300,6 +300,7 @@ class oNode:
                 greenPrint(f"[INFO] New best neighbour: {self.bestNeighbour}")
             else:
                 self.bestNeighbour = newBestNeighbourIP
+                greenPrint(f"[INFO] New best neighbour: {self.bestNeighbour}")
 
         videoListToRequest = []
         with self.streamedVideosLock:

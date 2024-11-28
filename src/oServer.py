@@ -40,6 +40,7 @@ class Servidor:
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as lsocket:
                 lsocket.bind((self.ip, ports.NODE_VIDEO_REQUEST_PORT))
+                lsocket.listen()
                 while True:
                     nodeSocket, addr = lsocket.accept()
                     nodeRequestHandler = threading.Thread(target=self.nodeRequestHandler, args=(nodeSocket, addr,))
