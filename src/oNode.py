@@ -31,7 +31,7 @@ class oNode:
         self.routingTable = {} # "IP": {"LS":Time, "LT":Time} LS = Last Seen, LT = Latency
         self.routingTableLock = threading.Lock()
         self.isPoP = False
-        self.streamedVideos = {} # "IP" : {"Streaming": True/False, "Neighbours": []}
+        self.streamedVideos = {} # "IP" : {"Streaming": "TRUE"|"FALSE"|"PENDING", "Neighbours": []}
         self.streamedVideosLock = threading.Lock()
         self.bestNeighbour = ""
         self.bestNeighbourLock = threading.Lock()
@@ -76,8 +76,10 @@ class oNode:
         messageType = packet.getMessageType()
 
         if messageType == "LR":  # Latency Request
+            with self.latencyLock:
+                latency = {"Latency": self.latency}
             message = TcpPacket("R", time.time())
-            # message.addData({"Latency": }) # TODO: Retornar o tempo de latência até ao servidor
+            message.addData(latency)
             responseSerialized = pickle.dumps(message)
             clientSocket.sendto(responseSerialized, addr)
             greenPrint(f"[INFO] Latency sent to {addr[0]}")
@@ -89,6 +91,14 @@ class oNode:
             clientSocket.sendto(responseSerialized, addr)
             greyPrint(f"[INFO] ACK sent to client {addr[0]}")
             self.startStreamingVideo(video_id, addr[0])
+        elif messageType == "SVR":  # Stop Video Request
+            video_id = packet.getData().get("video_id", "")
+            greenPrint(f"[INFO] Request to stop video {video_id} recieved from {addr[0]}")
+            message = TcpPacket("ACK")
+            responseSerialized = pickle.dumps(message)
+            clientSocket.sendto(responseSerialized, addr)
+            greyPrint(f"[INFO] ACK sent to client {addr[0]}")
+            self.stopStreamingVideo(video_id, addr[0])
     
     def neighbourPingSender(self) -> None:
         """
@@ -320,7 +330,7 @@ class oNode:
         videoListToRequest = []
         with self.streamedVideosLock:
             for video, info in self.streamedVideos.items():
-                if info["Streaming"]:
+                if info["Streaming"] == "TRUE":
                     videoListToRequest.append(video)
 
         for video in videoListToRequest:
@@ -448,6 +458,9 @@ class oNode:
         """
         Para de transmitir o video para um vizinho e verifica se podemos parar de receber a transmissão do mesmo.
         """
+        # TODO: Make this accept a list
+        # Do this logic and keep the videos to really stop in a list and then do the requestStopVideoFromNeighbour on that list
+        # Also make that function take a list
         try:
             stopStream = False
             with self.streamedVideosLock:
@@ -455,7 +468,7 @@ class oNode:
                     self.streamedVideos[video_id]["Neighbours"].remove(neighbourIP)
                     greenPrint(f"[INFO] Stopped streaming video {video_id} to {neighbourIP}")
                     if len(self.streamedVideos[video_id]["Neighbours"]) == 0:
-                        self.streamedVideos[video_id]["Streaming"] = False
+                        self.streamedVideos[video_id]["Streaming"] = "FALSE"
                         greenPrint(f"[INFO] Stopped streaming video {video_id}")
                         stopStream = True
             if stopStream:
@@ -477,7 +490,8 @@ class oNode:
         else:
             greenPrint(f"[INFO] Requesting video {video_id} from best neighbour")
             with self.streamedVideosLock:
-                self.streamedVideos[video_id] = {"Streaming": True, "Neighbours": [neighbourIP]} # FIX: Verificar se é aqui que meto True ou mais tarde, deve ser só quando receber o vídeo por UDP
+                # TODO: Ao receber o vídeo meter o Streaming a "TRUE"
+                self.streamedVideos[video_id] = {"Streaming": "PENDING", "Neighbours": [neighbourIP]}
             self.requestVideoFromNeighbour(video_id)
     
     def nodeVideoRequestManager(self) -> None:
