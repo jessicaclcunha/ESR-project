@@ -186,9 +186,10 @@ class oNode:
                     self.neighbours.append(neighbour)
 
             isBest = False
-            bestNeighbour = self.getBestNeighbour()
+            with self.bestNeighbourLock:
+                bestNeighbour = self.bestNeighbour
             with self.routingTableLock:
-                if latency <= self.routingTable[bestNeighbour]["LT"]:
+                if bestNeighbour == "" or latency <= self.routingTable[bestNeighbour]["LT"]:
                     isBest = True
                 print(self.routingTable)  # TODO: Debug, eliminar ou meter um print mais bonito
             if isBest:
