@@ -104,6 +104,8 @@ class Servidor:
                     ssocket.bind((self.ip, ports.NODE_PING_PORT))
                     ssocket.connect((neighbourIP, ports.NODE_MONITORING_PORT))
                     helloPacket = TcpPacket("HP")
+                    data = {"Latency": 0}
+                    helloPacket.addData(data)
                     ssocket.send(pickle.dumps(helloPacket))
                 except ConnectionRefusedError:
                     greyPrint(f"[WARN] Neighbour {neighbourIP} is not up.")

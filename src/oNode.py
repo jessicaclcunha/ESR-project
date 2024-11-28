@@ -167,7 +167,7 @@ class oNode:
                     if len(self.neighbours) == 1:
                         onlyNeighbour = True
                 with self.routingTableLock:
-                    latency = packet.getData()("Latency", float('inf'))
+                    latency = packet.getData().get("Latency", float('inf'))
                     if neighbour not in self.routingTable.keys():
                         self.routingTable[neighbour] = {"LT": latency,"LS":time.time(), "hops": 2**31-1}
                     else:
@@ -369,8 +369,9 @@ class oNode:
             neighbourIP = self.getBestNeighbour()
             ssocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:
-                ssocket.bind((self.ip, ports.ONLY_NEIGHBOUR_REQUESTS))
+                ssocket.settimeout(2)
                 ssocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
+                ssocket.bind((self.ip, ports.ONLY_NEIGHBOUR_REQUESTS))
                 ssocket.connect((neighbourIP, ports.NODE_GENERAL_REQUEST_PORT))
                 requestPacket = TcpPacket("BNR") # Best Neighbour Request
                 ssocket.send(pickle.dumps(requestPacket))
