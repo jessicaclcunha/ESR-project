@@ -46,13 +46,16 @@ class Bootstrapper:
         """
         packet = pickle.loads(nodeSocket.recv(4096))
         messageType = packet.getMessageType()
-        greenPrint(f"[INFO] Message received: {messageType}")
         try:
             nodeIP = nodeAddress[0]
             data = {}
+            greenPrint(f"[INFO] Message received: {messageType} from {nodeIP}")
 
             if messageType == "PLR":  # PLR = Pop List Request
-                data = { "PoPList" : self.popList }
+                data = {
+                    "PoPList" : self.popList,
+                    "IP" : nodeIP
+                }
             elif messageType == "NLR":  # NLR = Neighbours List Request
                 for key,info in self.nodes.items():
                     if nodeIP in key.split('|'):
@@ -61,8 +64,7 @@ class Bootstrapper:
                         break
                 data['isPoP'] = nodeIP in self.popList
 
-            response = TcpPacket("R")  # Response
-            response.addData(data)
+            response = TcpPacket("R", data)  # Response
             nodeSocket.send(pickle.dumps(response))
         except Exception as e:
             redPrint(f"[ERROR] Failed to handle node {nodeAddress}: {e}")

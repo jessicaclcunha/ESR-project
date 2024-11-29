@@ -78,26 +78,25 @@ class oNode:
         if messageType == "LR":  # Latency Request
             with self.latencyLock:
                 latency = {"Latency": self.latency}
-            message = TcpPacket("R", time.time())
-            message.addData(latency)
+            message = TcpPacket("R", latency)
             responseSerialized = pickle.dumps(message)
             clientSocket.sendto(responseSerialized, addr)
             greenPrint(f"[INFO] Latency sent to {addr[0]}")
         elif messageType == "VR":  # Video Request
             video_id = packet.getData().get("video_id", "")
             greenPrint(f"[INFO] Request for video {video_id} recieved from {addr[0]}")
-            message = TcpPacket("ACK")
+            message = TcpPacket("VRACK")  # Video Request Acknowledgement
             responseSerialized = pickle.dumps(message)
             clientSocket.sendto(responseSerialized, addr)
-            greyPrint(f"[INFO] ACK sent to client {addr[0]}")
+            greyPrint(f"[INFO] VRACK sent to client {addr[0]}")
             self.startStreamingVideo(video_id, addr[0])
         elif messageType == "SVR":  # Stop Video Request
             video_id = packet.getData().get("video_id", "")
             greenPrint(f"[INFO] Request to stop video {video_id} recieved from {addr[0]}")
-            message = TcpPacket("ACK")
+            message = TcpPacket("SVRACK")  # Stop Video Request Acknowledgement
             responseSerialized = pickle.dumps(message)
             clientSocket.sendto(responseSerialized, addr)
-            greyPrint(f"[INFO] ACK sent to client {addr[0]}")
+            greyPrint(f"[INFO] SVRACK sent to client {addr[0]}")
             self.stopStreamingVideo(video_id, addr[0])
     
     def neighbourPingSender(self) -> None:
@@ -120,10 +119,9 @@ class oNode:
                     ssocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
                     ssocket.bind((self.ip, ports.NODE_PING_PORT))
                     ssocket.connect((neighbourIP, ports.NODE_MONITORING_PORT))
-                    helloPacket = TcpPacket("HP")
                     with self.latencyLock:
                         data = {"Latency": self.latency}
-                    helloPacket.addData(data)
+                    helloPacket = TcpPacket("HP", data)
                     ssocket.send(pickle.dumps(helloPacket))
                 except ConnectionRefusedError:
                     greyPrint(f"[WARN] Neighbour {neighbourIP} is not up.")
@@ -209,8 +207,7 @@ class oNode:
                 self.switchBestNeighbour(neighbour)
                 data = packet.getData()
                 data["hops"] += 1
-                floodPacket = TcpPacket("FLOOD")
-                floodPacket.addData(data)
+                floodPacket = TcpPacket("FLOOD", data)
                 self.propagateFlood(floodPacket, neighbour)
 
     def propagateFlood(self, floodPacket: TcpPacket, originNeighbour: str) -> None:
@@ -429,10 +426,10 @@ class oNode:
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ssocket:
                 ssocket.connect((neighbourIP, ports.NODE_VIDEO_REQUEST_PORT))
-                videoRequestPacket = TcpPacket("VR")  # Video Request 
                 # TODO: Mudar para uma lista de videos, e não só um
+                data = {"video_id": video_id}
+                videoRequestPacket = TcpPacket("VR", data)  # Video Request 
                 # Facilita o processo de troca de bestNeighbour
-                videoRequestPacket.addData({"video_id": video_id})
                 ssocket.send(pickle.dumps(videoRequestPacket))
                 greenPrint(f"[INFO] Requested video {video_id} from {neighbourIP}")
         except Exception as e:
@@ -446,9 +443,9 @@ class oNode:
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ssocket:
                 ssocket.connect((neighbourIP, ports.NODE_VIDEO_REQUEST_PORT))
-                videoRequestPacket = TcpPacket("SVR")  # Stop Video Request
                 # TODO: Mudar para uma lista de vídeos, e não só um
-                videoRequestPacket.addData({"video_id": video_id})
+                data = {"video_id": video_id}
+                videoRequestPacket = TcpPacket("SVR", data)  # Stop Video Request
                 ssocket.send(pickle.dumps(videoRequestPacket))
                 greenPrint(f"[INFO] Requested to stop recieving the video {video_id} from {neighbourIP}")
         except Exception as e:

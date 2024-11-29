@@ -3,8 +3,8 @@ import sys
 import socket
 import threading
 
-from tkinter import *
-import tkinter.messagebox as tkMessageBox
+import tkinter as tk
+from tkinter import messagebox
 from PIL import Image, ImageTk
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -33,32 +33,32 @@ class ClienteGUI:
 	def createWidgets(self):
 		"""Build GUI."""
 		# Create Setup button
-		self.setup = Button(self.master, width=20, padx=3, pady=3)
+		self.setup = tk.Button(self.master, width=20, padx=3, pady=3)
 		self.setup["text"] = "Setup"
 		self.setup["command"] = self.setupMovie
 		self.setup.grid(row=1, column=0, padx=2, pady=2)
 		
 		# Create Play button		
-		self.start = Button(self.master, width=20, padx=3, pady=3)
+		self.start = tk.Button(self.master, width=20, padx=3, pady=3)
 		self.start["text"] = "Play"
 		self.start["command"] = self.playMovie
 		self.start.grid(row=1, column=1, padx=2, pady=2)
 		
 		# Create Pause button			
-		self.pause = Button(self.master, width=20, padx=3, pady=3)
+		self.pause = tk.Button(self.master, width=20, padx=3, pady=3)
 		self.pause["text"] = "Pause"
 		self.pause["command"] = self.pauseMovie
 		self.pause.grid(row=1, column=2, padx=2, pady=2)
 		
 		# Create Teardown button
-		self.teardown = Button(self.master, width=20, padx=3, pady=3)
+		self.teardown = tk.Button(self.master, width=20, padx=3, pady=3)
 		self.teardown["text"] = "Teardown"
 		self.teardown["command"] =  self.exitClient
 		self.teardown.grid(row=1, column=3, padx=2, pady=2)
 		
 		# Create a label to display the movie
-		self.label = Label(self.master, height=19)
-		self.label.grid(row=0, column=0, columnspan=4, sticky=W+E+N+S, padx=5, pady=5) 
+		self.label = tk.Label(self.master, height=19)
+		self.label.grid(row=0, column=0, columnspan=4, sticky=tk.W+tk.E+tk.N+tk.S, padx=5, pady=5) 
 	
 	def setupMovie(self):
 		"""Setup button handler."""
@@ -67,7 +67,10 @@ class ClienteGUI:
 	def exitClient(self):
 		"""Teardown button handler."""
 		self.master.destroy() # Close the gui window
-		os.remove(CACHE_FILE_NAME + str(self.sessionId) + CACHE_FILE_EXT) # Delete the cache image from video
+		try:
+			os.remove(CACHE_FILE_NAME + str(self.sessionId) + CACHE_FILE_EXT) # Delete the cache image from video
+		except FileNotFoundError:
+			pass
 
 	def pauseMovie(self):
 		"""Pause button handler."""
@@ -95,7 +98,8 @@ class ClienteGUI:
 					if currFrameNbr > self.frameNbr: # Discard the late packet
 						self.frameNbr = currFrameNbr
 						self.updateMovie(self.writeFrame(rtpPacket.getPayload()))
-			except:
+			except Exception as e:
+				print(f"[ERROR] {e}")
 				# Stop listening upon requesting PAUSE or TEARDOWN
 				if self.playEvent.isSet(): 
 					break
@@ -108,17 +112,15 @@ class ClienteGUI:
 	def writeFrame(self, data):
 		"""Write the received frame to a temp image file. Return the image file."""
 		cachename = CACHE_FILE_NAME + str(self.sessionId) + CACHE_FILE_EXT
-		file = open(cachename, "wb")
-		file.write(data)
-		file.close()
-		
+		with open(cachename, "wb") as file:
+			file.write(data)
 		return cachename
 	
 	def updateMovie(self, imageFile):
 		"""Update the image file as video frame in the GUI."""
 		photo = ImageTk.PhotoImage(Image.open(imageFile))
-		self.label.configure(image = photo, height=288) 
-		self.label.image = photo
+		self.photo = photo
+		self.label.configure(image = self.photo, height=288) 
 		
 	
 	def openRtpPort(self):
@@ -132,14 +134,14 @@ class ClienteGUI:
 		try:
 			# Bind the socket to the address using the RTP port
 			self.rtpSocket.bind((self.addr, self.port))
-			print('\nBind \n')
+			print('\nBind successful\n')
 		except:
-			tkMessageBox.showwarning('Unable to Bind', 'Unable to bind PORT=%d' %self.rtpPort)
+			messagebox.showwarning('Unable to Bind', 'Unable to bind PORT=%d' %self.port)
 
 	def handler(self):
 		"""Handler on explicitly closing the GUI window."""
 		self.pauseMovie()
-		if tkMessageBox.askokcancel("Quit?", "Are you sure you want to quit?"):
+		if messagebox.askokcancel("Quit?", "Are you sure you want to quit?"):
 			self.exitClient()
 		else: # When the user presses cancel, resume playing.
 			self.playMovie()

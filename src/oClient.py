@@ -20,43 +20,34 @@ class Client:
         self.ip = None
         self.video = video
         self.popList = []
-        self.bestPoP = None
+        self.bestPoP = ""
+        self.bestPoPLock = threading.Lock()
 
     def startClient(self) -> None:
         """
-        Função que comunica com o Bootstrapper e recebe a lista de PoPs.
+        Função que inicia todos os processos do cliente.
         """
         greenPrint(f"[INFO] Client started")
+        self.registerWithBootstrapper()
+        threading.Thread(target=self.findBestPoP).start()
+        threading.Thread(target=self.requestVideo).start()
+        threading.Thread(target=self.displayVideo).start()
+
+    def registerWithBootstrapper(self) -> None:
         greenPrint(f"[INFO] Connecting to Bootstrapper")
-            
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ssocket:
                 ssocket.connect((ports.BOOTSTRAPPER_IP, ports.BOOTSTRAPPER_PORT))
-                self.ip = ssocket.getsockname()[0]
                 greenPrint(f"[INFO] Connected to the Bootstrapper")
                 message = TcpPacket("PLR")  # PLR = PoP List Request
                 ssocket.sendall(pickle.dumps(message))
                 greenPrint(f"[INFO] Requested PoP list")
                 packet = pickle.loads(ssocket.recv(4096))
                 packetData = packet.getData()
-                self.popList = packetData["PoPList"] or []
+                self.ip = packetData.get("IP", ssocket.getsockname()[0])
+                greenPrint(f"[DATA] IP: {self.ip}")
+                self.popList = packetData.get("PoPList", []) 
                 greenPrint(f"[DATA] PoP list: {self.popList}")
-                
-                # display
-                r = tkinter.Tk()
-                r.title(self.video) # video_id
-                try:
-                    cg.ClientGUI(r, self.ip, ports.DISPLAY_PORT)
-                    r.mainloop()
-                finally:
-                    greenPrint(f"[INFO] Video a terminar.")
-                    
-                    # TODO: Mandar mensagem de paragem de vídeo
-                    stop_message = TcpPacket("STOP_VIDEO")
-                    ssocket.sendall(pickle.dumps(stop_message))
-                    greenPrint(f"[INFO] Sent stop video message")
-                
-
         except ConnectionRefusedError:
             redPrint(f"[ERROR] Could not connect to the Bootstrapper")
             sys.exit(1)
@@ -76,7 +67,7 @@ class Client:
                 greenPrint(f"[INFO] Connecting to {popIp}:{ports.NODE_CLIENT_LISTENING_PORT}")
                 try:
                     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sUDPsocket:
-                        message = TcpPacket("LR", time.time())
+                        message = TcpPacket("LR")
                         serializedMessage = pickle.dumps(message)
                         sUDPsocket.sendto(serializedMessage, (popIp, ports.NODE_CLIENT_LISTENING_PORT))
 
@@ -102,8 +93,10 @@ class Client:
                         lowestLatency = latency
                         bestPoP = popIp
 
-                self.bestPoP = bestPoP
-                greenPrint(f"[DATA] Best PoP: {self.bestPoP}")
+                with self.bestPoPLock:
+                    if bestPoP is not None:
+                        self.bestPoP = bestPoP
+                    greenPrint(f"[DATA] Best PoP: {self.bestPoP}")
             else:
                 greyPrint(f"[WARN] No valid latencies received. Trying again in {ut.CLIENT_NO_POP_WAIT_TIME} seconds.")
                 time.sleep(ut.CLIENT_NO_POP_WAIT_TIME)
@@ -114,31 +107,71 @@ class Client:
         """
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sUDPsocket:
             sUDPsocket.settimeout(2)
-            greenPrint(f"[INFO] Requesting video {self.video} to {self.bestPoP}")
-            packet = TcpPacket("VR")
             data = { 'video_id' : self.video }
-            packet.addData(data)
+            packet = TcpPacket("VR", data)
             serializedPacket = pickle.dumps(packet)
 
             notAcknowledged = True
             while notAcknowledged:
+                bestPoP = self.getBestPoP()
+                greenPrint(f"[INFO] Requesting video {self.video} to {bestPoP}")
                 try:
-                    sUDPsocket.sendto(serializedPacket, (self.bestPoP, ports.NODE_CLIENT_LISTENING_PORT))
+                    sUDPsocket.sendto(serializedPacket, (bestPoP, ports.NODE_CLIENT_LISTENING_PORT))
 
                     data, addr = sUDPsocket.recvfrom(4096)
                     response = pickle.loads(data)
 
-                    if response.getMessageType() == "ACK" and addr[0] == self.bestPoP:
-                        greenPrint(f"[INFO] ACK recieved from {self.bestPoP}.")
+                    if response.getMessageType() == "VRACK" and addr[0] == bestPoP:
+                        greenPrint(f"[INFO] VRACK recieved from {bestPoP}.")
                         notAcknowledged = False
                 except socket.timeout:
-                    greyPrint(f"[WARN] Video request to {self.bestPoP} timed out. Trying again in {ut.CLIENT_VIDEO_REQUEST_WAIT_TIME} seconds.")
+                    greyPrint(f"[WARN] Video request to {bestPoP} timed out. Trying again in {ut.CLIENT_VIDEO_REQUEST_WAIT_TIME} seconds.")
                     time.sleep(ut.CLIENT_VIDEO_REQUEST_WAIT_TIME)
                 except Exception as e:
                     redPrint(f"[ERROR] Error during video request: {e}")
                     break
 
-    # TODO: Process of recieving and displaying the video over UDP/RTP - confirmar
+    def requestStopVideo(self, bestPoP:str) -> None:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sUDPsocket:
+            sUDPsocket.settimeout(2)
+            data = { 'video_id' : self.video }
+            packet = TcpPacket("SVR", data)
+            serializedPacket = pickle.dumps(packet)
+
+            notAcknowledged = True
+            while notAcknowledged:
+                greenPrint(f"[INFO] Requesting video stop to {bestPoP}")
+                try:
+                    sUDPsocket.sendto(serializedPacket, (bestPoP, ports.NODE_CLIENT_LISTENING_PORT))
+                    data, addr = sUDPsocket.recvfrom(4096)
+                    response = pickle.loads(data)
+
+                    if response.getMessageType() == "SVRACK" and addr[0] == bestPoP:
+                        greenPrint(f"[INFO] VRACK recieved from {bestPoP}.")
+                        notAcknowledged = False
+
+                    greenPrint(f"[INFO] Video stop request sent to {bestPoP}.")
+                except socket.timeout:
+                    greyPrint(f"[WARN] Video stop request to {bestPoP} timed out. Trying again in {ut.CLIENT_VIDEO_REQUEST_WAIT_TIME} seconds.")
+                    time.sleep(ut.CLIENT_VIDEO_REQUEST_WAIT_TIME)
+
+    def getBestPoP(self) -> str:
+        while True:
+            with self.bestPoPLock:
+                if self.bestPoP != "":
+                    return self.bestPoP
+            time.sleep(ut.CLIENT_NO_POP_WAIT_TIME)
+        
+
+    def displayVideo(self) -> None:
+        r = tkinter.Tk()
+        r.title(self.video) # video_id
+        try:
+            cg.ClienteGUI(r, self.ip, ports.DISPLAY_PORT)
+            r.mainloop()
+        finally:
+            greenPrint(f"[INFO] Video a terminar.")
+            self.requestStopVideo(self.getBestPoP())
     
     def receiveVideo(self) -> None:
         """
@@ -169,5 +202,3 @@ if __name__ == "__main__":
 
     client = Client(video)
     client.startClient()
-    client.findBestPoP()
-    client.requestVideo()

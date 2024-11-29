@@ -153,9 +153,8 @@ class Servidor:
                     ssocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
                     ssocket.bind((self.ip, ports.NODE_PING_PORT))
                     ssocket.connect((neighbourIP, ports.NODE_MONITORING_PORT))
-                    helloPacket = TcpPacket("HP")
                     data = {"Latency": 0}
-                    helloPacket.addData(data)
+                    helloPacket = TcpPacket("HP", data)
                     ssocket.send(pickle.dumps(helloPacket))
                 except ConnectionRefusedError:
                     greyPrint(f"[WARN] Neighbour {neighbourIP} is not up.")
@@ -203,8 +202,8 @@ class Servidor:
                 ssocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
                 ssocket.bind((self.ip, ports.NODE_FLOOD_SENDING_PORT))
                 ssocket.connect((neighbour, ports.NODE_MONITORING_PORT))
-                floodPacket = TcpPacket("FLOOD")
-                floodPacket.addData({"ServerTimestamp": time.time(), "hops": 0})
+                data = {"ServerTimestamp": time.time(), "hops": 0}
+                floodPacket = TcpPacket("FLOOD", data)
                 ssocket.sendall(pickle.dumps(floodPacket))
             except ConnectionRefusedError:
                 greyPrint(f"[WARN] Neighbour {neighbour} is not up.")

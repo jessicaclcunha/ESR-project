@@ -14,10 +14,10 @@ import time
 
 
 class TcpPacket:
-    def __init__(self, messageType: str, timestamp: float = time.time()) -> None:
+    def __init__(self, messageType: str, data: dict = {},timestamp: float = time.time()) -> None:
         self.messageType = messageType
+        self.data = data
         self.timestamp = timestamp
-        self.data = {}
 
     def getMessageType(self) -> str:
         """
