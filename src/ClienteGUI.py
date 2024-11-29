@@ -98,6 +98,8 @@ class ClienteGUI:
 					if currFrameNbr > self.frameNbr: # Discard the late packet
 						self.frameNbr = currFrameNbr
 						self.updateMovie(self.writeFrame(rtpPacket.getPayload()))
+			except socket.timeout:
+				print("Socket Timeout Error")
 			except Exception as e:
 				print(f"[ERROR] {e}")
 				# Stop listening upon requesting PAUSE or TEARDOWN

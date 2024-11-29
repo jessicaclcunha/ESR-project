@@ -4,7 +4,7 @@ import time
 import pickle
 import socket
 import threading
-import tkinter as tkinter
+import tkinter as tk
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import utils.time as ut
@@ -161,10 +161,10 @@ class Client:
                 if self.bestPoP != "":
                     return self.bestPoP
             time.sleep(ut.CLIENT_NO_POP_WAIT_TIME)
-        
 
     def displayVideo(self) -> None:
-        r = tkinter.Tk()
+        os.environ["DISPLAY"] = ":0"
+        r = tk.Tk()
         r.title(self.video) # video_id
         try:
             cg.ClienteGUI(r, self.ip, ports.DISPLAY_PORT)
@@ -173,25 +173,6 @@ class Client:
             greenPrint(f"[INFO] Video a terminar.")
             self.requestStopVideo(self.getBestPoP())
     
-    def receiveVideo(self) -> None:
-        """
-        Recebe o vídeo como uma sequência de pacotes RTP.
-        """
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_socket:
-                udp_socket.bind((self.ip, ports.UDP_VIDEO_PORT))
-                while True:
-                    packet, _ = udp_socket.recvfrom(65536)
-                    rtp_packet = RtpPacket()
-                    rtp_packet.decode(packet)
-                    
-                    # frame_data = rtp_packet.getPayload()
-                    
-                    # self.diplayFrame(frame_data)
-                    
-        except socket.error as e:
-            redPrint(f"[ERROR] RTP socket error: {e}")
-            
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
