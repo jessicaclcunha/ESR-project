@@ -184,6 +184,11 @@ class oNode:
                     else:
                         self.routingTable[neighbour]["LT"] = latency
                         self.routingTable[neighbour]["LS"] = time.time()
+                    with self.bestNeighbourLock:
+                        bestNeighbour = self.bestNeighbour
+                    if bestNeighbour == neighbour:
+                        with self.latencyLock:
+                            self.latency = latency
             if onlyNeighbour:
                 self.switchBestNeighbour(neighbour)
         elif messageType == "FLOOD":
