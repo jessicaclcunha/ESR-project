@@ -164,9 +164,6 @@ class oNode:
             latencyNeighbourToServer = packet.getData().get("Latency", float('inf'))
             latency = latencyNeighbourToServer + (recievingTime - packet.getTimestamp())
             greenPrint(f"[INFO] Hello Packet received from  neighbour {neighbour}")
-            greenPrint(f"[DATA] Latency neighbour to server: {latencyNeighbourToServer}")
-            greenPrint(f"[DATA] RecievingTime: {recievingTime}")
-            greenPrint(f"[DATA] PACKET timeStamp: {packet.getTimestamp()}")
             greenPrint(f"[DATA] Latency to neighbour {neighbour}: {latency}")
             inTopology = True
             onlyNeighbour = False

@@ -24,7 +24,6 @@ class Servidor:
         self.videos = {} # "IP" : {"Streaming": True/False, "Neighbours": []}
         self.videosLock = threading.Lock()
         self.video_threads = {} # Threads de transmissão de vídeos
-        #self.video_clientes = {} # Clientes conectados a vídeo
 
     def startServer(self) -> None:
         """
@@ -35,6 +34,7 @@ class Servidor:
         threading.Thread(target=self.nodeRequestManager).start()
         # TODO:
         # Thread para dividir os vídeos em pacates e enviar os mesmos para os vizinhos
+        # startVideoThreads()
 
     def nodeRequestManager(self):
         """
@@ -76,17 +76,17 @@ class Servidor:
                 redPrint(f"[ERROR] Vídeo {video_id} não está disponível.")
                 return
             
-            #Adicionar o cliente à lista de espectadores
+            # TODO: Add locks
             if nodeAddress not in self.videos[video_id]["Neighbours"]:
                 self.videos[video_id]["Neighbours"].append(nodeAddress)
                 greenPrint(f"[INFO] Cliente {nodeAddress} conectado ao vídeo {video_id}.")
 
-            #Inicia a thread de transmissão (SE NÃO ESTIVER JÁ A TRANSMITIR)
-                if video_id not in self.video_threads:
-                    self.videos[video_id]["Streaming"] = True
-                    self.video_threads[video_id] = threading.Thread(target = self.streamVideo, args = (video_id))
-                    self.video_threads[video_id].start()
-                    greenPrint(f"[INFO] Transmissão de {video_id} iniciada.")
+            # TODO: A thread é iniciada logo ao começar o servidor, ele é que verifica se está streaming ou não
+            if video_id not in self.video_threads:
+                self.videos[video_id]["Streaming"] = True
+                self.video_threads[video_id] = threading.Thread(target = self.streamVideo, args = (video_id))
+                self.video_threads[video_id].start()
+                greenPrint(f"[INFO] Transmissão de {video_id} iniciada.")
             
     def streamVideo (self, video_id: str) -> None:
         """
@@ -107,14 +107,15 @@ class Servidor:
                         stream.frameNum = 0
                         frame = stream.nextFrame()
                     
-                    #Envia os pacotes APENAR para os clientes logados/conectados
+                    # Envia os pacotes APENAR para os clientes logados/conectados
+                    # Verificar se streaming é True antes de enviar aos clientes
                     with self.videosLock:
                         clients = self.videos[video_id]["Neighbours"]
                     if clients:
                         for client in clients:
                             timestamp = f"{time.time()}".encode("utf-8")
                             try:
-                                udp_socket.sendto(timestamp + frame, client)
+                                udp_socket.sendto(timestamp + frame, (client, ports.UDP_VIDEO_PORT))
                             except Exception as e:
                                 redPrint(f"[ERROR] Falha ao enviar para {client}: {e}")
 
@@ -167,7 +168,6 @@ class Servidor:
                         ssocket.close()
             time.sleep(ut.NODE_PING_INTERVAL)
 
-
     def loadVideoList(self) -> None:
         """
         Criar a lista de vídeos do hardware para o servidor.
@@ -215,7 +215,6 @@ class Servidor:
                 if ssocket:
                     ssocket.close()
             
-    # TODO: Distribuição dos vídeos quando pedido, mas estar sempre a criar os pacotes
     def registerWithBootstrapper(self) -> None:
         try:
             greenPrint(f"[INFO] Server started")
