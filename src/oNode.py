@@ -156,11 +156,15 @@ class oNode:
         Função responsável por lidar com os Hello Packets dos vizinhos.
         """
         packet = pickle.loads(nodeSocket.recv(4096))
+        recievingTime = time.time()
         messageType = packet.getMessageType()
         neighbour = addr[0]
 
         if messageType == "HP":
+            latencyNeighbourToServer = packet.getData().get("Latency", float('inf'))
+            latency = latencyNeighbourToServer + (recievingTime - packet.getTimestamp())
             greenPrint(f"[INFO] Hello Packet received from  neighbour {neighbour}")
+            greenPrint(f"[DATA] Latency to neighbour {neighbour}: {latency}")
             inTopology = True
             onlyNeighbour = False
             with self.topologyNeighboursLock:
@@ -172,48 +176,46 @@ class oNode:
                     if neighbour not in self.neighbours:
                         self.neighbours.append(neighbour)
                         greenPrint(f"[DATA] Neighbour {neighbour} just appeared and was added to the active neighbour list.")
+                    # TODO: Remove this, add it to the routingTable below and then the other thread does this
                     if len(self.neighbours) == 1:
                         onlyNeighbour = True
                 with self.routingTableLock:
-                    latencyNeighbourToPoP = packet.getData().get("Latency", float('inf'))
-                    latency = latencyNeighbourToPoP + (time.time() - packet.getTimestamp())
-                    greenPrint(f"[DATA] Latency to neighbour {neighbour}: {latency}")
                     if neighbour not in self.routingTable.keys():
                         # TODO: Send and recieve number of hops too
                         self.routingTable[neighbour] = {"LT": latency,"LS":time.time(), "hops": 2**31-1}
                     else:
                         self.routingTable[neighbour]["LT"] = latency
                         self.routingTable[neighbour]["LS"] = time.time()
-                    with self.bestNeighbourLock:
-                        bestNeighbour = self.bestNeighbour
-                    if bestNeighbour == neighbour:
-                        with self.latencyLock:
-                            self.latency = latency
+                with self.bestNeighbourLock:
+                    bestNeighbour = self.bestNeighbour
+                if bestNeighbour == neighbour:
+                    with self.latencyLock:
+                        self.latency = latency
             if onlyNeighbour:
                 self.switchBestNeighbour(neighbour)
         elif messageType == "FLOOD":
-            latency = time.time() - packet.getData()["ServerTimestamp"]
-            hops = packet.getData()["hops"]
-            greenPrint(f"[INFO] FLOOD Packet received from neighbour {neighbour} with latency {latency} and {hops} hops")
-            with self.routingTableLock:
-                self.routingTable[neighbour] = {"LT": latency, "LS": time.time(), "hops": hops}
-            with self.neighboursLock:
-                if neighbour not in self.neighbours:
-                    self.neighbours.append(neighbour)
-
+            latency = recievingTime - packet.getData()["ServerTimestamp"]
             isBest = False
             with self.bestNeighbourLock:
                 bestNeighbour = self.bestNeighbour
             with self.routingTableLock:
-                if bestNeighbour == "" or latency <= self.routingTable[bestNeighbour]["LT"]:
+                if bestNeighbour == "" or latency < self.routingTable[bestNeighbour]["LT"]:
                     isBest = True
-                print(self.routingTable)  # TODO: Debug, eliminar ou meter um print mais bonito
             if isBest:
-                self.switchBestNeighbour(neighbour)
                 data = packet.getData()
                 data["hops"] += 1
                 floodPacket = TcpPacket("FLOOD", data)
                 self.propagateFlood(floodPacket, neighbour)
+                self.switchBestNeighbour(neighbour)
+
+            hops = packet.getData()["hops"]
+            greenPrint(f"[INFO] FLOOD Packet received from neighbour {neighbour} with latency {latency} and {hops} hops")
+            with self.routingTableLock:
+                self.routingTable[neighbour] = {"LT": latency, "LS": time.time(), "hops": hops}
+                print(self.routingTable)  # TODO: Debug, eliminar ou meter um print mais bonito
+            with self.neighboursLock:
+                if neighbour not in self.neighbours:
+                    self.neighbours.append(neighbour)
 
     def propagateFlood(self, floodPacket: TcpPacket, originNeighbour: str) -> None:
         """
@@ -306,6 +308,8 @@ class oNode:
         """
         # TODO: Enviar SVR para o antigo melhor vizinho, caso o mesmo esteja ativo ainda
         # SVR no campo data contém lista de vídeos, e não um só vídeo
+        # atualizar o self.latency também
+        # se newBestNeighbourIP == self.bestNeighbour fazer nada
         bestNeighbourActive = True 
         empty = False
         if newBestNeighbourIP != "":
