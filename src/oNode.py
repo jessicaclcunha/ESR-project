@@ -164,6 +164,9 @@ class oNode:
             latencyNeighbourToServer = packet.getData().get("Latency", float('inf'))
             latency = latencyNeighbourToServer + (recievingTime - packet.getTimestamp())
             greenPrint(f"[INFO] Hello Packet received from  neighbour {neighbour}")
+            greenPrint(f"[DATA] Latency neighbour to server: {latencyNeighbourToServer}")
+            greenPrint(f"[DATA] RecievingTime: {recievingTime}")
+            greenPrint(f"[DATA] PACKET timeStamp: {packet.getTimestamp()}")
             greenPrint(f"[DATA] Latency to neighbour {neighbour}: {latency}")
             inTopology = True
             onlyNeighbour = False
@@ -225,7 +228,8 @@ class oNode:
         """
         with self.neighboursLock:
             neighbours = self.neighbours.copy()
-        neighbours.remove(originNeighbour)
+        if originNeighbour in neighbours:
+            neighbours.remove(originNeighbour)
         
         ssocket = None
         for neighbour in neighbours:
@@ -300,6 +304,8 @@ class oNode:
                 redPrint(f"[DATA] Best neighbour: {self.bestNeighbour}")
             with self.routingTableLock:
                 redPrint(f"[DATA] Routing Table: {self.routingTable}")
+            with self.streamedVideosLock:
+                redPrint(f"[DATA] Streamed Videos: {self.streamedVideos}")
             time.sleep(ut.NODE_ROUTING_TABLE_MONITORING_INTERVAL)
 
     def switchBestNeighbour(self, newBestNeighbourIP: str) -> None:
