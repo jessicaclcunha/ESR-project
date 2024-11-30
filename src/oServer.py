@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 import time
 import pickle
 import socket
@@ -11,6 +12,7 @@ import utils.time as ut
 import utils.ports as ports
 import utils.VideoStream as VideoStream
 from packets.TcpPacket import TcpPacket
+from packets.RtpPacket import RtpPacket
 from utils.colors import greenPrint, redPrint, greyPrint
 
 class Servidor:
@@ -142,6 +144,7 @@ class Servidor:
         Cria continuamente os pacotes de vídeo e transmite para os vizinhos que os pediram.
         """
         video_path = f"../videos/{video_id}.Mjpeg"
+        sequenceNumber = 0
         try:
             stream = VideoStream.VideoStream(video_path)
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_socket:
@@ -151,6 +154,25 @@ class Servidor:
                         stream.file.seek(0)
                         stream.frameNum = 0
                         frame = stream.nextFrame()
+
+                    rtpPacket = RtpPacket()
+                    payloadDict = {
+                        "video_id": video_id,
+                        "frame": frame,
+                    }
+                    payload = json.dumps(payloadDict).encode("utf-8")
+                    rtpPacket.encode(
+                        version=2,
+                        padding=0,
+                        extension=0, 
+                        cc=0,       
+                        seqnum=sequenceNumber, 
+                        marker=0,             
+                        pt=26, # MJPEG              
+                        ssrc=0,      
+                        payload=payload 
+                    )
+                    sequenceNumber += 1
                     
                     clients = []
                     with self.videosLock:
@@ -158,10 +180,8 @@ class Servidor:
                             clients = self.videos[video_id]["Neighbours"]
                     if clients:
                         for client in clients:
-                            # TODO: Enviar a mensagem num pacote diferente, que inclua o video_id
-                            timestamp = f"{time.time()}".encode("utf-8")
                             try:
-                                udp_socket.sendto(timestamp + frame, (client, ports.UDP_VIDEO_PORT))
+                                udp_socket.sendto(rtpPacket.getPacket(), (client, ports.UDP_VIDEO_PORT))
                             except Exception as e:
                                 redPrint(f"[ERROR] Falha ao enviar para {client}: {e}")
 

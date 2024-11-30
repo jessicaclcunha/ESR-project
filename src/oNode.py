@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 import time
 import pickle
 import socket
@@ -10,6 +11,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import utils.time as ut
 import utils.ports as ports
 from packets.TcpPacket import TcpPacket
+from packets.RtpPacket import RtpPacket
 from utils.colors import greenPrint, redPrint, greyPrint
 
 
@@ -36,6 +38,19 @@ class oNode:
         self.bestNeighbour = ""
         self.bestNeighbourLock = threading.Lock()
 
+    def startNode(self) -> None:
+        """
+        Função responsável por esperar conexões e lidar com os pedidos que o Node recebe.
+        """
+        if self.isPoP:
+            threading.Thread(target=self.clientConnectionManager).start()
+        threading.Thread(target=self.neighbourConnectionManagement).start()
+        threading.Thread(target=self.neighbourPingSender).start()
+        threading.Thread(target=self.nodeVideoRequestManager).start()
+        threading.Thread(target=self.nodeGeneralRequestManager).start()
+        threading.Thread(target=self.routingTableMonitoring).start()
+        threading.Thread(target=self.nodeVideoHandler).start()
+
     def clientConnectionManager(self):
        """
        Função responsável por aceitar as ligações dos clientes.
@@ -52,18 +67,8 @@ class oNode:
                 client_handler.start() 
             except Exception as e:
                 redPrint(f"[ERROR] Error in client connection manager: {e}")
-
-    def startNode(self) -> None:
-        """
-        Função responsável por esperar conexões e lidar com os pedidos que o Node recebe.
-        """
-        if self.isPoP:
-            threading.Thread(target=self.clientConnectionManager).start()
-        threading.Thread(target=self.neighbourConnectionManagement).start()
-        threading.Thread(target=self.neighbourPingSender).start()
-        threading.Thread(target=self.nodeVideoRequestManager).start()
-        threading.Thread(target=self.nodeGeneralRequestManager).start()
-        threading.Thread(target=self.routingTableMonitoring).start()
+            finally:
+                lUDPsocket.close()
 
     def clientRequestHandler(self, clientSocket: socket.socket, data: bytes, addr: Tuple[str,int]) -> None:
         """
@@ -133,6 +138,47 @@ class oNode:
                     if ssocket:
                         ssocket.close()
             time.sleep(ut.NODE_PING_INTERVAL)
+
+    def nodeVideoHandler(self) -> None:
+        """
+        Função responsável por receber e distribuir os vídeos.
+        """
+        lsocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        lsocket.bind((self.ip, ports.UDP_VIDEO_PORT))
+        greenPrint(f"[INFO] Video distribution thread started on port {ports.UDP_VIDEO_PORT}")
+
+        try:
+            while True:
+                try:
+                    rtpPacketBytes, addr = lsocket.recvfrom(4096)
+                    threading.Thread(target=self.videoPacketHandler, args=(lsocket, rtpPacketBytes)).start()
+                except Exception as e:
+                    redPrint(f"[ERROR] Error in video distribution: {e}")
+        finally:
+            lsocket.close()
+
+    def videoPacketHandler(self, lsocket: socket.socket, rtpPacketBytes: bytes) -> None:
+        """
+        Função responsável por distribuir os pacotes RTP aos vizinhos.
+        """
+        rtpPacket = RtpPacket()
+        rtpPacket.decode(rtpPacketBytes)
+        payloadJson = rtpPacket.getPayload()
+        payloadDict = json.loads(payloadJson.decode("utf-8"))
+        video_id = payloadDict.get("video_id", "")
+
+        neighbours = []
+        with self.streamedVideosLock:
+            if video_id in self.streamedVideos.keys():
+                if self.streamedVideos[video_id]["Streaming"] == "PENDING":
+                    self.streamedVideos[video_id]["Streaming"] = "TRUE"
+                if self.streamedVideos[video_id]["Streaming"] != "FALSE":
+                    neighbours = self.streamedVideos[video_id]["Neighbours"]
+        for neighbour in neighbours:
+            try:
+                lsocket.sendto(rtpPacketBytes, (neighbour, ports.UDP_VIDEO_PORT))
+            except Exception as e:
+                redPrint(f"[ERROR] Error in video distribution to neighbour {neighbour}: {e}")
 
     def neighbourConnectionManagement(self) -> None:
         """
