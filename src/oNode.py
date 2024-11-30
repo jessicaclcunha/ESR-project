@@ -136,7 +136,7 @@ class oNode:
 
     def neighbourConnectionManagement(self) -> None:
         """
-        Função responsável por receber os Hello Packets dos vizinhos.
+        Função responsável por receber os Hello e Flood Packets dos vizinhos.
         """
         greenPrint(f"[INFO] Neighbour monitoring thread started on port {ports.NODE_MONITORING_PORT}")
         lsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -153,7 +153,7 @@ class oNode:
 
     def neighbourConnectionHandler(self, nodeSocket: socket.socket, addr: Tuple[str, int]) -> None:
         """
-        Função responsável por lidar com os Hello Packets dos vizinhos.
+        Função responsável por lidar com os Hello e Flood Packets dos vizinhos.
         """
         packet = pickle.loads(nodeSocket.recv(4096))
         recievingTime = time.time()

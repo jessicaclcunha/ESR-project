@@ -23,7 +23,6 @@ class Servidor:
         self.topologyNeighboursLock = threading.Lock()
         self.videos = {} # "IP" : {"Streaming": True/False, "Neighbours": []}
         self.videosLock = threading.Lock()
-        self.video_threads = {} # Threads de transmissão de vídeos
 
     def startServer(self) -> None:
         """
@@ -32,9 +31,53 @@ class Servidor:
         threading.Thread(target=self.startFlood).start()
         threading.Thread(target=self.neighbourPingSender).start()
         threading.Thread(target=self.nodeRequestManager).start()
-        # TODO:
-        # Thread para dividir os vídeos em pacates e enviar os mesmos para os vizinhos
-        # startVideoThreads()
+        threading.Thread(target=self.nodeConnectionManager).start()
+        self.startVideoThreads()
+
+    def startVideoThreads(self):
+        """
+        Função responsável por uma thread para cada stream de video.
+        """
+        for video in self.videos:
+            threading.Thread(target=self.streamVideo, args=(video,)).start()
+
+    def nodeConnectionManager(self) -> None:
+        """
+        Função responsável por receber os Hello Packets dos vizinhos.
+        """
+        greenPrint(f"[INFO] Neighbour monitoring thread started on port {ports.NODE_MONITORING_PORT}")
+        lsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        lsocket.bind((self.ip, ports.NODE_MONITORING_PORT))
+        lsocket.listen()
+
+        while True:
+            try:
+                nodeSocket , addr = lsocket.accept()
+                neighbourHandler = threading.Thread(target=self.nodeConnectionHandler, args=(nodeSocket, addr,))
+                neighbourHandler.start()
+            except Exception as e:
+                redPrint(f"[ERROR] Error in neighbour monitoring: {e}")
+
+    def nodeConnectionHandler(self, nodeSocket: socket.socket, addr: Tuple[str, int]) -> None:
+        """
+        Função responsável por lidar com os Hello Packets dos vizinhos.
+        """
+        packet = pickle.loads(nodeSocket.recv(4096))
+        messageType = packet.getMessageType()
+        neighbour = addr[0]
+
+        if messageType == "HP":
+            greenPrint(f"[INFO] Hello Packet received from  neighbour {neighbour}")
+            inTopology = True
+            with self.topologyNeighboursLock:
+                if neighbour not in self.topologyNeighbours:
+                    redPrint(f"[ATTENTION] Non expected Hello Packet recieved from {neighbour}")
+                    inTopology = False
+            if inTopology:
+                with self.neighboursLock:
+                    if neighbour not in self.neighbours:
+                        self.neighbours.append(neighbour)
+                        greenPrint(f"[DATA] Neighbour {neighbour} just appeared and was added to the active neighbour list.")
 
     def nodeRequestManager(self):
         """
@@ -74,54 +117,14 @@ class Servidor:
         with self.videosLock:
             if video_id not in self.videos:
                 redPrint(f"[ERROR] Vídeo {video_id} não está disponível.")
-                return
-            
-            # TODO: Add locks
-            if nodeAddress not in self.videos[video_id]["Neighbours"]:
-                self.videos[video_id]["Neighbours"].append(nodeAddress)
-                greenPrint(f"[INFO] Cliente {nodeAddress} conectado ao vídeo {video_id}.")
-
-            # TODO: A thread é iniciada logo ao começar o servidor, ele é que verifica se está streaming ou não
-            if video_id not in self.video_threads:
-                self.videos[video_id]["Streaming"] = True
-                self.video_threads[video_id] = threading.Thread(target = self.streamVideo, args = (video_id))
-                self.video_threads[video_id].start()
-                greenPrint(f"[INFO] Transmissão de {video_id} iniciada.")
-            
-    def streamVideo (self, video_id: str) -> None:
-        """
-        Transmite continuamente os pacotes de vídeo
-        """
-        video_path = f"../videos/{video_id}"
-        if not os.path.exists(video_path):
-            redPrint(f"[ERROR] Arquivo {video_path} não existe/não encontrado.")
-            return
-        
-        try:
-            stream = VideoStream.VideoStream(video_path)
-            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_socket:
-                while True:
-                    frame = stream.nextFrame()
-                    if not frame:  # Reinicia o vídeo ao atingir o final
-                        stream.file.seek(0)
-                        stream.frameNum = 0
-                        frame = stream.nextFrame()
-                    
-                    # Envia os pacotes APENAR para os clientes logados/conectados
-                    # Verificar se streaming é True antes de enviar aos clientes
-                    with self.videosLock:
-                        clients = self.videos[video_id]["Neighbours"]
-                    if clients:
-                        for client in clients:
-                            timestamp = f"{time.time()}".encode("utf-8")
-                            try:
-                                udp_socket.sendto(timestamp + frame, (client, ports.UDP_VIDEO_PORT))
-                            except Exception as e:
-                                redPrint(f"[ERROR] Falha ao enviar para {client}: {e}")
-
-                    time.sleep(0.04)  # Intervalo entre pacotes
-        except Exception as e:
-            redPrint(f"[ERRO] Failed to open the video file {e}")
+            else:
+                # TODO: Add locks
+                if nodeAddress not in self.videos[video_id]["Neighbours"]:
+                    self.videos[video_id]["Neighbours"].append(nodeAddress)
+                    greenPrint(f"[INFO] Cliente {nodeAddress} conectado ao vídeo {video_id}.")
+                if not self.videos[video_id]["Streaming"]:
+                    self.videos[video_id]["Streaming"] = True
+                    greenPrint(f"[INFO] Transmissão de {video_id} iniciada.")
 
     def handleStopVideoRequest(self, nodeAddress: Tuple[str, int], video_id: str) -> None:
         """
@@ -133,6 +136,38 @@ class Servidor:
                 if len(self.videos[video_id]["Neighbours"]) == 0:
                     self.videos[video_id]["Streaming"] = False
                     greenPrint(f"[INFO] Transmissão de {video_id} terminada.") 
+            
+    def streamVideo (self, video_id: str) -> None:
+        """
+        Cria continuamente os pacotes de vídeo e transmite para os vizinhos que os pediram.
+        """
+        video_path = f"../videos/{video_id}.Mjpeg"
+        try:
+            stream = VideoStream.VideoStream(video_path)
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_socket:
+                while True:
+                    frame = stream.nextFrame()
+                    if not frame:  # Reinicia o vídeo ao atingir o final
+                        stream.file.seek(0)
+                        stream.frameNum = 0
+                        frame = stream.nextFrame()
+                    
+                    clients = []
+                    with self.videosLock:
+                        if self.videos[video_id]["Streaming"]:
+                            clients = self.videos[video_id]["Neighbours"]
+                    if clients:
+                        for client in clients:
+                            # TODO: Enviar a mensagem num pacote diferente, que inclua o video_id
+                            timestamp = f"{time.time()}".encode("utf-8")
+                            try:
+                                udp_socket.sendto(timestamp + frame, (client, ports.UDP_VIDEO_PORT))
+                            except Exception as e:
+                                redPrint(f"[ERROR] Falha ao enviar para {client}: {e}")
+
+                    time.sleep(0.04)  # Intervalo entre pacotes
+        except Exception as e:
+            redPrint(f"[ERRO] Failed to open the video file {e}")
 
     def neighbourPingSender(self) -> None:
         """
@@ -216,6 +251,9 @@ class Servidor:
                     ssocket.close()
             
     def registerWithBootstrapper(self) -> None:
+        """
+        Função responsável por comunicar com o bootstrapper e receber a lista de vizinhos.
+        """
         try:
             greenPrint(f"[INFO] Server started")
             greenPrint(f"[INFO] Connecting to Bootstrapper")
