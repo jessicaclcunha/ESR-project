@@ -1,8 +1,6 @@
 import os
 import sys
-import json
 import time
-import base64
 import pickle
 import socket
 import threading
@@ -113,34 +111,35 @@ class Servidor:
         elif messageType == "SVR":  # Stop Video Request
             self.handleStopVideoRequest(nodeAddress, packet.getData().get("video_id", ""))
     
-    def handleVideoRequest(self, nodeAddress: Tuple[str, int], video_id: str) -> None:
+    def handleVideoRequest(self, nodeAddress: Tuple[str, int], videoList: list) -> None:
         """
         Função responsável por lidar com os pedidos de vídeo dos vizinhos.
         """
         nodeIP = nodeAddress[0]
         with self.videosLock:
-            if video_id not in self.videos:
-                redPrint(f"[ERROR] Vídeo {video_id} não está disponível.")
-            else:
-                # TODO: Add locks
-                if nodeIP not in self.videos[video_id]["Neighbours"]:
-                    self.videos[video_id]["Neighbours"].append(nodeIP)
-                    greenPrint(f"[INFO] Cliente {nodeIP} conectado ao vídeo {video_id}.")
-                if not self.videos[video_id]["Streaming"]:
-                    self.videos[video_id]["Streaming"] = True
-                    greenPrint(f"[INFO] Transmissão de {video_id} iniciada.")
+            for video_id in videoList:
+                if video_id not in self.videos:
+                    redPrint(f"[ERROR] Vídeo {video_id} não está disponível.")
+                else:
+                    if nodeIP not in self.videos[video_id]["Neighbours"]:
+                        self.videos[video_id]["Neighbours"].append(nodeIP)
+                        greenPrint(f"[INFO] Cliente {nodeIP} conectado ao vídeo {video_id}.")
+                    if not self.videos[video_id]["Streaming"]:
+                        self.videos[video_id]["Streaming"] = True
+                        greenPrint(f"[INFO] Transmissão de {video_id} iniciada.")
 
-    def handleStopVideoRequest(self, nodeAddress: Tuple[str, int], video_id: str) -> None:
+    def handleStopVideoRequest(self, nodeAddress: Tuple[str, int], videoList: list) -> None:
         """
         Gere pedidos de vídeo, adicionando o cliente à lista de espectadores.
         """
         nodeIP = nodeAddress[0]
         with self.videosLock:
-            if video_id in self.videos.keys():
-                self.videos[video_id]["Neighbours"].remove(nodeIP)
-                if len(self.videos[video_id]["Neighbours"]) == 0:
-                    self.videos[video_id]["Streaming"] = False
-                    greenPrint(f"[INFO] Transmissão de {video_id} terminada.") 
+            for video_id in videoList:
+                if video_id in self.videos.keys():
+                    self.videos[video_id]["Neighbours"].remove(nodeIP)
+                    if len(self.videos[video_id]["Neighbours"]) == 0:
+                        self.videos[video_id]["Streaming"] = False
+                        greenPrint(f"[INFO] Transmissão de {video_id} terminada.") 
             
     def streamVideo (self, video_id: str) -> None:
         """
