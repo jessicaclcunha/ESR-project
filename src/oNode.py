@@ -52,23 +52,24 @@ class oNode:
         threading.Thread(target=self.nodeVideoHandler).start()
 
     def clientConnectionManager(self):
-       """
-       Função responsável por aceitar as ligações dos clientes.
-       """
-       lUDPsocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-       lUDPsocket.bind((self.ip, ports.NODE_CLIENT_LISTENING_PORT))
-       greenPrint(f"Listening for client connections in {self.ip}:{ports.NODE_CLIENT_LISTENING_PORT}")
+        """
+        Função responsável por aceitar as ligações dos clientes.
+        """
+        lUDPsocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        lUDPsocket.bind((self.ip, ports.NODE_CLIENT_LISTENING_PORT))
+        greenPrint(f"Listening for client connections in {self.ip}:{ports.NODE_CLIENT_LISTENING_PORT}")
 
-       while True:
-            try:
-                data, addr = lUDPsocket.recvfrom(4096)  # Aceitar a cenexão de um cliente
-                greenPrint(f"[INFO] Packet recieved from {addr[0]}")
-                client_handler = threading.Thread(target=self.clientRequestHandler, args=(lUDPsocket,data,addr,))  # Criar thread para lidar com o cliente
-                client_handler.start() 
-            except Exception as e:
-                redPrint(f"[ERROR] Error in client connection manager: {e}")
-            finally:
-                lUDPsocket.close()
+        try:
+            while True:
+                try:
+                    data, addr = lUDPsocket.recvfrom(4096)  # Aceitar a cenexão de um cliente
+                    greenPrint(f"[INFO] Packet recieved from {addr[0]}")
+                    client_handler = threading.Thread(target=self.clientRequestHandler, args=(lUDPsocket,data,addr,))  # Criar thread para lidar com o cliente
+                    client_handler.start() 
+                except Exception as e:
+                    redPrint(f"[ERROR] Error in client connection manager: {e}")
+        finally:
+            lUDPsocket.close()
 
     def clientRequestHandler(self, clientSocket: socket.socket, data: bytes, addr: Tuple[str,int]) -> None:
         """
