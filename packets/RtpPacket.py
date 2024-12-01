@@ -54,13 +54,14 @@ class RtpPacket:
 	def getPayload(self):
 		"""Return payload."""
 		try:
-			return self.payload.split(b'\n')[1]
+			payload = self.payload.split(b'\n',1)[1]
+			return payload + b'\xFF\xD9'
 		except IndexError:
 			return self.payload
 
 	def getVideoId(self):
 		"""Return video id."""
-		return self.payload.split(b'\n')[0].decode('utf-8')
+		return self.payload.split(b'\n',1)[0].decode('utf-8')
 		
 	def getPacket(self):
 		"""Return RTP packet."""
