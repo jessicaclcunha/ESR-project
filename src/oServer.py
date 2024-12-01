@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import time
+import base64
 import pickle
 import socket
 import threading
@@ -116,14 +117,15 @@ class Servidor:
         """
         Função responsável por lidar com os pedidos de vídeo dos vizinhos.
         """
+        nodeIP = nodeAddress[0]
         with self.videosLock:
             if video_id not in self.videos:
                 redPrint(f"[ERROR] Vídeo {video_id} não está disponível.")
             else:
                 # TODO: Add locks
-                if nodeAddress not in self.videos[video_id]["Neighbours"]:
-                    self.videos[video_id]["Neighbours"].append(nodeAddress)
-                    greenPrint(f"[INFO] Cliente {nodeAddress} conectado ao vídeo {video_id}.")
+                if nodeIP not in self.videos[video_id]["Neighbours"]:
+                    self.videos[video_id]["Neighbours"].append(nodeIP)
+                    greenPrint(f"[INFO] Cliente {nodeIP} conectado ao vídeo {video_id}.")
                 if not self.videos[video_id]["Streaming"]:
                     self.videos[video_id]["Streaming"] = True
                     greenPrint(f"[INFO] Transmissão de {video_id} iniciada.")
@@ -132,9 +134,10 @@ class Servidor:
         """
         Gere pedidos de vídeo, adicionando o cliente à lista de espectadores.
         """
+        nodeIP = nodeAddress[0]
         with self.videosLock:
             if video_id in self.videos.keys():
-                self.videos[video_id]["Neighbours"].remove(nodeAddress)
+                self.videos[video_id]["Neighbours"].remove(nodeIP)
                 if len(self.videos[video_id]["Neighbours"]) == 0:
                     self.videos[video_id]["Streaming"] = False
                     greenPrint(f"[INFO] Transmissão de {video_id} terminada.") 
@@ -144,6 +147,8 @@ class Servidor:
         Cria continuamente os pacotes de vídeo e transmite para os vizinhos que os pediram.
         """
         video_path = f"../videos/{video_id}.Mjpeg"
+        print(video_id)
+        print(video_path)
         sequenceNumber = 0
         try:
             stream = VideoStream.VideoStream(video_path)
@@ -158,7 +163,7 @@ class Servidor:
                     rtpPacket = RtpPacket()
                     payloadDict = {
                         "video_id": video_id,
-                        "frame": frame,
+                        "frame": base64.b64encode(frame).decode("utf-8"),
                     }
                     payload = json.dumps(payloadDict).encode("utf-8")
                     rtpPacket.encode(
@@ -236,7 +241,7 @@ class Servidor:
         try:
             for video in os.listdir(videoDirectory):
                 if os.path.isfile(os.path.join(videoDirectory, video)):
-                    videoName = os.path.splitext(video)
+                    videoName = os.path.splitext(video)[0]
                     self.videos[videoName] = {"Streaming": False, "Neighbours": []}
                     greyPrint(f"[DATA] Loaded video {video}")
             greenPrint("[INFO] Loaded videos")
