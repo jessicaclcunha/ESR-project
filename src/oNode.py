@@ -357,6 +357,9 @@ class oNode:
         # TODO: Enviar SVR para o antigo melhor vizinho, caso o mesmo esteja ativo ainda
         # SVR no campo data contém lista de vídeos, e não um só vídeo
         # se newBestNeighbourIP == self.bestNeighbour fazer nada
+        with self.bestNeighbourLock:
+            if newBestNeighbourIP == self.bestNeighbour:
+                return
         bestNeighbourActive = True 
         empty = False
         with self.neighboursLock:
