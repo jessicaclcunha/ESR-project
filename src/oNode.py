@@ -475,7 +475,7 @@ class oNode:
                 ssocket.close()
                 time.sleep(ut.BEST_NEIGHBOUR_REQUEST_INTERVAL)
     
-    def requestVideoFromNeighbour(self, videoList:list[str]) -> None:
+    def requestVideoFromNeighbour(self, videoList:list) -> None:
         """
         Solicita o video ao melhor vizinho.
         """
@@ -491,7 +491,7 @@ class oNode:
         except Exception as e:
             redPrint(f"[ERROR] Failed to request video(s) {videoList} from {neighbourIP}: {e}")
 
-    def requestStopVideoFromNeighbour(self, videoList:list[str]) -> None:
+    def requestStopVideoFromNeighbour(self, videoList:list) -> None:
         """
         Solicita a paragem da stream do video ao melhor vizinho.
         """
@@ -507,7 +507,7 @@ class oNode:
         except Exception as e:
             redPrint(f"[ERROR] Failed to request to stop video {videoList} from {neighbourIP}: {e}")
             
-    def stopStreamingVideo(self, videoList:list[str], neighbourIP:str) -> None:
+    def stopStreamingVideo(self, videoList:list, neighbourIP:str) -> None:
         """
         Para de transmitir o video para um vizinho e verifica se podemos parar de receber a transmissão do mesmo.
         """
@@ -529,7 +529,7 @@ class oNode:
         except Exception as e:
             redPrint(f"[ERROR] Failed to stop streaming video(s) {videoList}: {e}")
 
-    def startStreamingVideo(self, videoList:list[str], neighbourIP:str) -> None:
+    def startStreamingVideo(self, videoList:list, neighbourIP:str) -> None:
         """
         Função responsável por iniciar a transmissão do video para um vizinho.
         """
