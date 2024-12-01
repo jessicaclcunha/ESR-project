@@ -236,7 +236,8 @@ class Servidor:
         try:
             for video in os.listdir(videoDirectory):
                 if os.path.isfile(os.path.join(videoDirectory, video)):
-                    self.videos[video] = {"Streaming": False, "Neighbours": []}
+                    videoName = os.path.splitext(video)
+                    self.videos[videoName] = {"Streaming": False, "Neighbours": []}
                     greyPrint(f"[DATA] Loaded video {video}")
             greenPrint("[INFO] Loaded videos")
         except Exception as e:
