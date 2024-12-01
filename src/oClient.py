@@ -29,9 +29,9 @@ class Client:
         """
         greenPrint(f"[INFO] Client started")
         self.registerWithBootstrapper()
-        threading.Thread(target=self.findBestPoP).start()
-        threading.Thread(target=self.requestVideo).start()
-        threading.Thread(target=self.displayVideo).start()
+        self.findBestPoP()
+        self.requestVideo()
+        self.displayVideo()
 
     def registerWithBootstrapper(self) -> None:
         greenPrint(f"[INFO] Connecting to Bootstrapper")
@@ -54,7 +54,6 @@ class Client:
         except socket.error as e:
             redPrint(f"[ERROR] {e}")
             sys.exit(1)
-
 
     def findBestPoP(self) -> None:
         """

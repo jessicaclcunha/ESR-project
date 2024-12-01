@@ -1,6 +1,5 @@
 import os
 import sys
-import json
 import time
 import pickle
 import socket
@@ -95,7 +94,7 @@ class oNode:
             responseSerialized = pickle.dumps(message)
             clientSocket.sendto(responseSerialized, addr)
             greyPrint(f"[INFO] VRACK sent to client {addr[0]}")
-            self.startStreamingVideo(video_id, addr[0])
+            self.startStreamingVideo([video_id], addr[0])
         elif messageType == "SVR":  # Stop Video Request
             video_id = packet.getData().get("video_id", "")
             greenPrint(f"[INFO] Request to stop video {video_id} recieved from {addr[0]}")
@@ -103,7 +102,7 @@ class oNode:
             responseSerialized = pickle.dumps(message)
             clientSocket.sendto(responseSerialized, addr)
             greyPrint(f"[INFO] SVRACK sent to client {addr[0]}")
-            self.stopStreamingVideo(video_id, addr[0])
+            self.stopStreamingVideo([video_id], addr[0])
     
     def neighbourPingSender(self) -> None:
         """
@@ -357,14 +356,12 @@ class oNode:
         """
         # TODO: Enviar SVR para o antigo melhor vizinho, caso o mesmo esteja ativo ainda
         # SVR no campo data contém lista de vídeos, e não um só vídeo
-        # atualizar o self.latency também
         # se newBestNeighbourIP == self.bestNeighbour fazer nada
         bestNeighbourActive = True 
         empty = False
-        if newBestNeighbourIP != "":
-            with self.neighboursLock:
-                empty = len(self.neighbours) == 0
-                bestNeighbourActive = newBestNeighbourIP in self.neighbours
+        with self.neighboursLock:
+            empty = len(self.neighbours) == 0
+            bestNeighbourActive = newBestNeighbourIP in self.neighbours
         with self.otherNeighbourLock:
             otherNeighbour = self.otherNeighbourOption
         with self.bestNeighbourLock:
@@ -385,11 +382,10 @@ class oNode:
         videoListToRequest = []
         with self.streamedVideosLock:
             for video, info in self.streamedVideos.items():
-                if info["Streaming"] == "TRUE":
+                if info["Streaming"] != "FALSE":
                     videoListToRequest.append(video)
 
-        for video in videoListToRequest:
-            self.requestVideoFromNeighbour(video)
+        self.requestVideoFromNeighbour(videoListToRequest)
 
         with self.bestNeighbourLock:
             bestNeighbourIP = self.bestNeighbour
@@ -476,7 +472,7 @@ class oNode:
                 ssocket.close()
                 time.sleep(ut.BEST_NEIGHBOUR_REQUEST_INTERVAL)
     
-    def requestVideoFromNeighbour(self, video_id:str) -> None:
+    def requestVideoFromNeighbour(self, videoList:list[str]) -> None:
         """
         Solicita o video ao melhor vizinho.
         """
@@ -484,16 +480,15 @@ class oNode:
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ssocket:
                 ssocket.connect((neighbourIP, ports.NODE_VIDEO_REQUEST_PORT))
-                # TODO: Mudar para uma lista de videos, e não só um
-                data = {"video_id": video_id}
+                data = {"videoList": videoList}
                 videoRequestPacket = TcpPacket("VR", data)  # Video Request 
                 # Facilita o processo de troca de bestNeighbour
                 ssocket.send(pickle.dumps(videoRequestPacket))
-                greenPrint(f"[INFO] Requested video {video_id} from {neighbourIP}")
+                greenPrint(f"[INFO] Requested video(s) {videoList} from {neighbourIP}")
         except Exception as e:
-            redPrint(f"[ERROR] Failed to request video {video_id} from {neighbourIP}: {e}")
+            redPrint(f"[ERROR] Failed to request video(s) {videoList} from {neighbourIP}: {e}")
 
-    def requestStopVideoFromNeighbour(self, video_id:str) -> None:
+    def requestStopVideoFromNeighbour(self, videoList:list[str]) -> None:
         """
         Solicita a paragem da stream do video ao melhor vizinho.
         """
@@ -502,52 +497,55 @@ class oNode:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ssocket:
                 ssocket.connect((neighbourIP, ports.NODE_VIDEO_REQUEST_PORT))
                 # TODO: Mudar para uma lista de vídeos, e não só um
-                data = {"video_id": video_id}
+                data = {"videoList": videoList}
                 videoRequestPacket = TcpPacket("SVR", data)  # Stop Video Request
                 ssocket.send(pickle.dumps(videoRequestPacket))
-                greenPrint(f"[INFO] Requested to stop recieving the video {video_id} from {neighbourIP}")
+                greenPrint(f"[INFO] Requested to stop recieving the video {videoList} from {neighbourIP}")
         except Exception as e:
-            redPrint(f"[ERROR] Failed to request to stop video {video_id} from {neighbourIP}: {e}")
+            redPrint(f"[ERROR] Failed to request to stop video {videoList} from {neighbourIP}: {e}")
             
-    def stopStreamingVideo(self, video_id:str, neighbourIP:str) -> None:
+    def stopStreamingVideo(self, videoList:list[str], neighbourIP:str) -> None:
         """
         Para de transmitir o video para um vizinho e verifica se podemos parar de receber a transmissão do mesmo.
         """
-        # TODO: Make this accept a list
-        # Do this logic and keep the videos to really stop in a list and then do the requestStopVideoFromNeighbour on that list
-        # Also make that function take a list
         try:
-            stopStream = False
-            with self.streamedVideosLock:
-                if video_id in self.streamedVideos.keys():
-                    self.streamedVideos[video_id]["Neighbours"].remove(neighbourIP)
-                    greenPrint(f"[INFO] Stopped streaming video {video_id} to {neighbourIP}")
-                    if len(self.streamedVideos[video_id]["Neighbours"]) == 0:
-                        self.streamedVideos[video_id]["Streaming"] = "FALSE"
-                        greenPrint(f"[INFO] Stopped streaming video {video_id}")
-                        stopStream = True
-            if stopStream:
-                self.requestStopVideoFromNeighbour(video_id) 
+            videoStopList = []
+            for video_id in videoList:
+                stopStream = False
+                with self.streamedVideosLock:
+                    if video_id in self.streamedVideos.keys():
+                        self.streamedVideos[video_id]["Neighbours"].remove(neighbourIP)
+                        greenPrint(f"[INFO] Stopped streaming video {video_id} to {neighbourIP}")
+                        if len(self.streamedVideos[video_id]["Neighbours"]) == 0:
+                            self.streamedVideos[video_id]["Streaming"] = "FALSE"
+                            greenPrint(f"[INFO] Stopped streaming video {video_id}")
+                            stopStream = True
+                if stopStream:
+                    videoStopList.append(video_id)
+            self.requestStopVideoFromNeighbour(videoStopList) 
         except Exception as e:
-            redPrint(f"[ERROR] Failed to stop streaming video {video_id}: {e}")
+            redPrint(f"[ERROR] Failed to stop streaming video(s) {videoList}: {e}")
 
-    def startStreamingVideo(self, video_id:str, neighbourIP:str) -> None:
+    def startStreamingVideo(self, videoList:list[str], neighbourIP:str) -> None:
         """
         Função responsável por iniciar a transmissão do video para um vizinho.
         """
         with self.streamedVideosLock:
             streamedVideos = self.streamedVideos.copy()
-        if video_id in streamedVideos.keys() and streamedVideos[video_id]["Streaming"] == "TRUE":
-            greenPrint(f"[INFO] Forwarding video {video_id} to {neighbourIP}")
-            with self.streamedVideosLock:
-                if neighbourIP not in self.streamedVideos[video_id]["Neighbours"]:
-                    self.streamedVideos[video_id]["Neighbours"].append(neighbourIP)
-        else:
-            # TODO: If pending, sleep and wait a bit
-            greenPrint(f"[INFO] Requesting video {video_id} from best neighbour")
-            with self.streamedVideosLock:
-                self.streamedVideos[video_id] = {"Streaming": "PENDING", "Neighbours": [neighbourIP]}
-            self.requestVideoFromNeighbour(video_id)
+        videosToRequest = []
+        for video_id in videoList:
+            if video_id in streamedVideos.keys() and streamedVideos[video_id]["Streaming"] == "TRUE":
+                greenPrint(f"[INFO] Forwarding video {video_id} to {neighbourIP}")
+                with self.streamedVideosLock:
+                    if neighbourIP not in self.streamedVideos[video_id]["Neighbours"]:
+                        self.streamedVideos[video_id]["Neighbours"].append(neighbourIP)
+            else:
+                # TODO: If pending, sleep and wait a bit
+                greenPrint(f"[INFO] Requesting video {video_id} from best neighbour")
+                with self.streamedVideosLock:
+                    self.streamedVideos[video_id] = {"Streaming": "PENDING", "Neighbours": [neighbourIP]}
+                videosToRequest.append(video_id)
+        self.requestVideoFromNeighbour(videosToRequest)
     
     def nodeVideoRequestManager(self) -> None:
         """
@@ -569,13 +567,13 @@ class oNode:
         data = lsocket.recv(4096)
         packet = pickle.loads(data)
         messageType = packet.getMessageType()
-        video_id = packet.getData().get("video_id", "")
+        videoList = packet.getData().get("videoList", [])
         ipAddr = addr[0]
 
         if messageType == "VR":  # Video Request
-            self.startStreamingVideo(video_id, ipAddr)
+            self.startStreamingVideo(videoList, ipAddr)
         elif messageType == "SVR":  # Stop Video Request
-            self.stopStreamingVideo(video_id, ipAddr)
+            self.stopStreamingVideo(videoList, ipAddr)
 
     def nodeGeneralRequestManager(self) -> None:
         """

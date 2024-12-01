@@ -99,7 +99,7 @@ class ClienteGUI:
 						self.frameNbr = currFrameNbr
 						self.updateMovie(self.writeFrame(rtpPacket.getPayload()))
 			except socket.timeout:
-				print("Socket Timeout Error")
+				print("Packet not recieved")
 			except Exception as e:
 				print(f"[ERROR] {e}")
 				# Stop listening upon requesting PAUSE or TEARDOWN
