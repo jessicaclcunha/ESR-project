@@ -87,7 +87,7 @@ class ClienteGUI:
 		"""Listen for RTP packets."""
 		while True:
 			try:
-				data = self.rtpSocket.recv(20480)
+				data = self.rtpSocket.recv(65535)
 				if data:
 					rtpPacket = RtpPacket()
 					rtpPacket.decode(data)
@@ -120,9 +120,12 @@ class ClienteGUI:
 	
 	def updateMovie(self, imageFile):
 		"""Update the image file as video frame in the GUI."""
-		photo = ImageTk.PhotoImage(Image.open(imageFile))
-		self.photo = photo
-		self.label.configure(image = self.photo, height=288) 
+		try:
+			photo = ImageTk.PhotoImage(Image.open(imageFile))
+			self.photo = photo
+			self.label.configure(image = self.photo, height=288) 
+		except OSError:
+			pass
 		
 	
 	def openRtpPort(self):
