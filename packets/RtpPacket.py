@@ -63,14 +63,7 @@ class RtpPacket:
 
 	def getVideoId(self):
 		"""Return video id."""
-		if (self.header[0] >> 4) & 0x01:
-			extension_length_bytes = self.header[12:14]
-			if len(extension_length_bytes) != 2:
-				raise ValueError("Invalid extension length (should be 2 bytes)")
-		extension_length = struct.unpack("!H", extension_length_bytes)[0]
-		extension_data = self.header[14:14+extension_length]
-		video_id = extension_data.decode("utf-8")
-		return video_id
+		return self.header[12:].decode('utf-8').strip()
 		
 	def getPacket(self):
 		"""Return RTP packet."""
