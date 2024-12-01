@@ -165,7 +165,7 @@ class Servidor:
                     rtpPacket.encode(
                         version=2,
                         padding=0,
-                        extension=1, 
+                        extension=0, 
                         cc=0,       
                         seqnum=sequenceNumber, 
                         marker=0,             

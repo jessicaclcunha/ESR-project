@@ -25,13 +25,8 @@ class RtpPacket:
 		self.header[9] = (ssrc >> 16) & 0xFF;
 		self.header[10] = (ssrc >> 8) & 0xFF;
 		self.header[11] = ssrc & 0xFF
-		if extension:
-			if video_id:
-				extension_data = video_id.encode('utf-8')
-				extension_length = len(extension_data)
-				self.header.extend(struct.pack("!H", extension_length))
-				self.header.extend(extension_data)
 		self.payload = payload
+		self.video_id = video_id
 		
 	def decode(self, byteStream):
 		"""Decode the RTP packet."""
@@ -63,7 +58,7 @@ class RtpPacket:
 
 	def getVideoId(self):
 		"""Return video id."""
-		return self.header[12:].decode('utf-8').strip()
+		return self.video_id
 		
 	def getPacket(self):
 		"""Return RTP packet."""
