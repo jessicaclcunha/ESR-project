@@ -55,7 +55,9 @@ class RtpPacket:
 		"""Return payload."""
 		try:
 			payload = self.payload.split(b'\n',1)[1]
-			return payload + b'\xFF\xD9'
+			if not payload.endswith(b'\xFF\xD9'):
+				payload += b'\xFF\xD9'
+			return payload
 		except IndexError:
 			return self.payload
 

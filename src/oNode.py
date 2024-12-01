@@ -151,7 +151,7 @@ class oNode:
         try:
             while True:
                 try:
-                    rtpPacketBytes, addr = lsocket.recvfrom(4096)
+                    rtpPacketBytes, addr = lsocket.recvfrom(65535)
                     threading.Thread(target=self.videoPacketHandler, args=(lsocket, rtpPacketBytes)).start()
                 except Exception as e:
                     redPrint(f"[ERROR] Error in video distribution: {e}")
