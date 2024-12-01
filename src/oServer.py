@@ -161,21 +161,18 @@ class Servidor:
                         frame = stream.nextFrame()
 
                     rtpPacket = RtpPacket()
-                    payloadDict = {
-                        "video_id": video_id,
-                        "frame": base64.b64encode(frame).decode("utf-8"),
-                    }
-                    payload = json.dumps(payloadDict).encode("utf-8")
+                    payload = frame
                     rtpPacket.encode(
                         version=2,
                         padding=0,
-                        extension=0, 
+                        extension=1, 
                         cc=0,       
                         seqnum=sequenceNumber, 
                         marker=0,             
                         pt=26, # MJPEG              
                         ssrc=0,      
-                        payload=payload 
+                        payload=payload,
+                        video_id=video_id
                     )
                     sequenceNumber += 1
                     

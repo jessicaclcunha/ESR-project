@@ -1,35 +1,36 @@
-import sys
+import struct
 from time import time
 HEADER_SIZE = 12
 
 class RtpPacket:	
-	header = bytearray(HEADER_SIZE)
-	
 	def __init__(self):
-		pass
+		self.header = bytearray(HEADER_SIZE)
 		
-	def encode(self, version, padding, extension, cc, seqnum, marker, pt, ssrc, payload):
+	def encode(self, version, padding, extension, cc, seqnum, marker, pt, ssrc, payload, video_id = None):
 		"""Encode the RTP packet with header fields and payload."""
 		timestamp = int(time())
-		header = bytearray(HEADER_SIZE) 
-		header[0] = (header[0] | version << 6) & 0xC0; # 2 bits
-		header[0] = (header[0] | padding << 5); # 1 bit
-		header[0] = (header[0] | extension << 4); # 1 bit
-		header[0] = (header[0] | (cc & 0x0F)); # 4 bits
-		header[1] = (header[1] | marker << 7); # 1 bit
-		header[1] = (header[1] | (pt & 0x7f)); # 7 bits
-		header[2] = (seqnum >> 8); 
-		header[3] = (seqnum & 0xFF);
-		header[4] = (timestamp >> 24);
-		header[5] = (timestamp >> 16) & 0xFF;
-		header[6] = (timestamp >> 8) & 0xFF;
-		header[7] = (timestamp & 0xFF);
-		header[8] = (ssrc >> 24);
-		header[9] = (ssrc >> 16) & 0xFF;
-		header[10] = (ssrc >> 8) & 0xFF;
-		header[11] = ssrc & 0xFF
-		# set header and  payload
-		self.header = header
+		self.header[0] = (self.header[0] | version << 6) & 0xC0; # 2 bits
+		self.header[0] = (self.header[0] | padding << 5); # 1 bit
+		self.header[0] = (self.header[0] | extension << 4); # 1 bit
+		self.header[0] = (self.header[0] | (cc & 0x0F)); # 4 bits
+		self.header[1] = (self.header[1] | marker << 7); # 1 bit
+		self.header[1] = (self.header[1] | (pt & 0x7f)); # 7 bits
+		self.header[2] = (seqnum >> 8); 
+		self.header[3] = (seqnum & 0xFF);
+		self.header[4] = (timestamp >> 24);
+		self.header[5] = (timestamp >> 16) & 0xFF;
+		self.header[6] = (timestamp >> 8) & 0xFF;
+		self.header[7] = (timestamp & 0xFF);
+		self.header[8] = (ssrc >> 24);
+		self.header[9] = (ssrc >> 16) & 0xFF;
+		self.header[10] = (ssrc >> 8) & 0xFF;
+		self.header[11] = ssrc & 0xFF
+		if extension:
+			if video_id:
+				extension_data = video_id.encode('utf-8')
+				extension_length = len(extension_data)
+				self.header.extend(struct.pack("!H", extension_length))
+				self.header.extend(extension_data)
 		self.payload = payload
 		
 	def decode(self, byteStream):
@@ -59,6 +60,13 @@ class RtpPacket:
 	def getPayload(self):
 		"""Return payload."""
 		return self.payload
+
+	def getVideoId(self):
+		"""Return video id."""
+		extension_length = struct.unpack("!H", self.header[12:14])[0]
+		extension_data = self.header[14:14+extension_length]
+		video_id = extension_data.decode("utf-8")
+		return video_id
 		
 	def getPacket(self):
 		"""Return RTP packet."""
@@ -66,5 +74,3 @@ class RtpPacket:
 
 	def printheader(self):
 		print("[RTP Packet] Version: ...")
-
-

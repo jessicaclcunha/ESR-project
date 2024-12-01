@@ -164,9 +164,7 @@ class oNode:
         """
         rtpPacket = RtpPacket()
         rtpPacket.decode(rtpPacketBytes)
-        payloadJson = rtpPacket.getPayload()
-        payloadDict = json.loads(payloadJson.decode("utf-8"))
-        video_id = payloadDict.get("video_id", "")
+        video_id = rtpPacket.getVideoId()
 
         neighbours = []
         with self.streamedVideosLock:

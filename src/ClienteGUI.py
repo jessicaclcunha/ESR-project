@@ -98,16 +98,7 @@ class ClienteGUI:
 										
 					if currFrameNbr > self.frameNbr: # Discard the late packet
 						self.frameNbr = currFrameNbr
-
-						payloadJson = rtpPacket.getPayload()
-						payloadDict = json.loads(payloadJson.decode("utf-8"))
-						video_id = payloadDict.get("video_id", None)
-						frame = payloadDict.get("frame", None)
-
-						if video_id is not None and frame is not None:
-							self.updateMovie(self.writeFrame(frame))
-						else:
-							print("Invalid RTP Packet")
+						self.updateMovie(self.writeFrame(rtpPacket.getPayload()))
 			except socket.timeout:
 				print("Socket Timeout Error")
 			except Exception as e:
