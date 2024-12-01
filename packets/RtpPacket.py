@@ -1,4 +1,3 @@
-import struct
 from time import time
 HEADER_SIZE = 12
 
@@ -6,7 +5,7 @@ class RtpPacket:
 	def __init__(self):
 		self.header = bytearray(HEADER_SIZE)
 		
-	def encode(self, version, padding, extension, cc, seqnum, marker, pt, ssrc, payload, video_id = None):
+	def encode(self, version, padding, extension, cc, seqnum, marker, pt, ssrc, payload, video_id = ""):
 		"""Encode the RTP packet with header fields and payload."""
 		timestamp = int(time())
 		self.header[0] = (self.header[0] | version << 6) & 0xC0; # 2 bits
@@ -25,15 +24,13 @@ class RtpPacket:
 		self.header[9] = (ssrc >> 16) & 0xFF;
 		self.header[10] = (ssrc >> 8) & 0xFF;
 		self.header[11] = ssrc & 0xFF
-		self.payload = payload
-		self.video_id = video_id
+		modified_payload = video_id.encode('utf-8') + b'\n' + payload
+		self.payload = modified_payload
 		
 	def decode(self, byteStream):
 		"""Decode the RTP packet."""
 		self.header = bytearray(byteStream[:HEADER_SIZE])
-		extension_length = struct.unpack("!H", byteStream[12:14])[0]
-		self.video_id = byteStream[14:14+extension_length].decode('utf-8')
-		self.payload = byteStream[14+extension_length:]
+		self.payload = byteStream[HEADER_SIZE:]
 	
 	def version(self):
 		"""Return RTP version."""
@@ -56,21 +53,18 @@ class RtpPacket:
 	
 	def getPayload(self):
 		"""Return payload."""
-		return self.payload
+		try:
+			return self.payload.split(b'\n')[1]
+		except IndexError:
+			return self.payload
 
 	def getVideoId(self):
 		"""Return video id."""
-		return self.video_id
+		return self.payload.split(b'\n')[0].decode('utf-8')
 		
 	def getPacket(self):
 		"""Return RTP packet."""
-		video_id_bytes = self.video_id.encode('utf-8')
-		extension_length = len(video_id_bytes)
-		packet = self.header
-		packet.extend(struct.pack("!H", extension_length))
-		packet.extend(video_id_bytes)
-		packet.extend(self.payload)
-		return packet
+		return self.header + self.payload
 
 	def printheader(self):
 		print("[RTP Packet] Version: ...")

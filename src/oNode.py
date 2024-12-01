@@ -165,6 +165,7 @@ class oNode:
         rtpPacket = RtpPacket()
         rtpPacket.decode(rtpPacketBytes)
         video_id = rtpPacket.getVideoId()
+        redPrint(f"[INFO] Video {video_id}")
 
         neighbours = []
         with self.streamedVideosLock:
@@ -535,16 +536,16 @@ class oNode:
         Função responsável por iniciar a transmissão do video para um vizinho.
         """
         with self.streamedVideosLock:
-            streamedVideosList = self.streamedVideos.keys()
-        if video_id in streamedVideosList:
+            streamedVideos = self.streamedVideos.copy()
+        if video_id in streamedVideos.keys() and streamedVideos[video_id]["Streaming"] == "TRUE":
             greenPrint(f"[INFO] Forwarding video {video_id} to {neighbourIP}")
             with self.streamedVideosLock:
                 if neighbourIP not in self.streamedVideos[video_id]["Neighbours"]:
                     self.streamedVideos[video_id]["Neighbours"].append(neighbourIP)
         else:
+            # TODO: If pending, sleep and wait a bit
             greenPrint(f"[INFO] Requesting video {video_id} from best neighbour")
             with self.streamedVideosLock:
-                # TODO: Ao receber o vídeo meter o Streaming a "TRUE"
                 self.streamedVideos[video_id] = {"Streaming": "PENDING", "Neighbours": [neighbourIP]}
             self.requestVideoFromNeighbour(video_id)
     

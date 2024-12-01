@@ -167,7 +167,7 @@ class Client:
         r = tk.Tk()
         r.title(self.video) # video_id
         try:
-            cg.ClienteGUI(r, self.ip, ports.DISPLAY_PORT)
+            cg.ClienteGUI(r, self.ip, ports.UDP_VIDEO_PORT)
             r.mainloop()
         finally:
             greenPrint(f"[INFO] Video a terminar.")
