@@ -31,7 +31,9 @@ class RtpPacket:
 	def decode(self, byteStream):
 		"""Decode the RTP packet."""
 		self.header = bytearray(byteStream[:HEADER_SIZE])
-		self.payload = byteStream[HEADER_SIZE:]
+		extension_length = struct.unpack("!H", byteStream[12:14])[0]
+		self.video_id = byteStream[14:14+extension_length].decode('utf-8')
+		self.payload = byteStream[14+extension_length:]
 	
 	def version(self):
 		"""Return RTP version."""
@@ -62,7 +64,13 @@ class RtpPacket:
 		
 	def getPacket(self):
 		"""Return RTP packet."""
-		return self.header + self.payload
+		video_id_bytes = self.video_id.encode('utf-8')
+		extension_length = len(video_id_bytes)
+		packet = self.header
+		packet.extend(struct.pack("!H", extension_length))
+		packet.extend(video_id_bytes)
+		packet.extend(self.payload)
+		return packet
 
 	def printheader(self):
 		print("[RTP Packet] Version: ...")
