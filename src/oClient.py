@@ -123,6 +123,7 @@ class Client:
             elif oldPoP not in popLatencies.keys() and bestPoP in popLatencies.keys():
                 with self.bestPoPLock:
                     self.bestPoP = bestPoP
+                self.requestVideo()
                 greenPrint(f"[DATA] Best PoP: {self.bestPoP}")
 
     def requestVideo(self) -> None:
