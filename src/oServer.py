@@ -33,6 +33,7 @@ class Servidor:
         threading.Thread(target=self.neighbourPingSender).start()
         threading.Thread(target=self.nodeRequestManager).start()
         threading.Thread(target=self.nodeConnectionManager).start()
+        threading.Thread(target=self.nodeGeneralRequestManager).start()
         self.startVideoThreads()
 
     def startVideoThreads(self):
@@ -41,6 +42,33 @@ class Servidor:
         """
         for video in self.videos:
             threading.Thread(target=self.streamVideo, args=(video,)).start()
+
+    def nodeGeneralRequestManager(self) -> None:
+        """
+        Função responsável por receber os pedidos gerais dos vizinhos.
+        """
+        lsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        lsocket.bind((self.ip, ports.NODE_GENERAL_REQUEST_PORT))
+        lsocket.listen()
+
+        while True:
+            nodeSocket, addr = lsocket.accept()
+            nodeRequestHandler = threading.Thread(target=self.nodeGeneralRequestHandler, args=(nodeSocket, addr))
+            nodeRequestHandler.start()
+
+    def nodeGeneralRequestHandler(self, nodeSocket: socket.socket, addr: Tuple[str, int]) -> None:
+        """
+        Função responsável por lidar com os pedidos gerais dos vizinhos.
+        """
+        packet = pickle.loads(nodeSocket.recv(4096))
+        messageType = packet.getMessageType()
+        greenPrint(f"[INFO] {messageType} request recieved from {addr[0]}")
+
+        if messageType == "BNR":  # Best Neighbour Request
+            packet = TcpPacket("R", {"BestNeighbour": "Server"})
+            responseSerialized = pickle.dumps(packet)
+            nodeSocket.send(responseSerialized)
+            nodeSocket.close()
 
     def nodeConnectionManager(self) -> None:
         """
@@ -107,9 +135,9 @@ class Servidor:
         # TODO: Check if the neighbour is already in the list, if not add it
         
         if messageType == "VR":  # Video Request
-            self.handleVideoRequest(nodeAddress, packet.getData().get("video_id", ""))
+            self.handleVideoRequest(nodeAddress, packet.getData().get("videoList", []))
         elif messageType == "SVR":  # Stop Video Request
-            self.handleStopVideoRequest(nodeAddress, packet.getData().get("video_id", ""))
+            self.handleStopVideoRequest(nodeAddress, packet.getData().get("videoList", []))
     
     def handleVideoRequest(self, nodeAddress: Tuple[str, int], videoList: list) -> None:
         """
@@ -210,7 +238,7 @@ class Servidor:
                     ssocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
                     ssocket.bind((self.ip, ports.NODE_PING_PORT))
                     ssocket.connect((neighbourIP, ports.NODE_MONITORING_PORT))
-                    data = {"Latency": 0}
+                    data = {"Latency": 0}  # TODO: "hops":1
                     helloPacket = TcpPacket("HP", data)
                     ssocket.send(pickle.dumps(helloPacket))
                 except ConnectionRefusedError:

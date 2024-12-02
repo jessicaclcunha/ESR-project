@@ -125,7 +125,7 @@ class oNode:
                     ssocket.bind((self.ip, ports.NODE_PING_PORT))
                     ssocket.connect((neighbourIP, ports.NODE_MONITORING_PORT))
                     with self.latencyLock:
-                        data = {"Latency": self.latency}
+                        data = {"Latency": self.latency}  # TODO: "hops": self.hops
                     helloPacket = TcpPacket("HP", data)
                     ssocket.send(pickle.dumps(helloPacket))
                 except ConnectionRefusedError:
@@ -208,6 +208,7 @@ class oNode:
         if messageType == "HP":
             latencyNeighbourToServer = packet.getData().get("Latency", float('inf'))
             latency = latencyNeighbourToServer + (recievingTime - packet.getTimestamp())
+            # TODO: hopsToServer = packet.getData().get("hops", 2**31-1)
             greenPrint(f"[INFO] Hello Packet received from  neighbour {neighbour}")
             greenPrint(f"[DATA] Latency to neighbour {neighbour}: {latency}")
             inTopology = True
@@ -354,9 +355,6 @@ class oNode:
         """
         Função responsável por trocar o melhor vizinho e requisitar os vídeos necessários.
         """
-        # TODO: Enviar SVR para o antigo melhor vizinho, caso o mesmo esteja ativo ainda
-        # SVR no campo data contém lista de vídeos, e não um só vídeo
-        # se newBestNeighbourIP == self.bestNeighbour fazer nada
         with self.bestNeighbourLock:
             if newBestNeighbourIP == self.bestNeighbour:
                 return
@@ -369,6 +367,8 @@ class oNode:
             otherNeighbour = self.otherNeighbourOption
         with self.bestNeighbourLock:
             if empty:
+                # TODO: Maybe mudar, não empty, mas para não ter vizinhos à sua frente na topologia
+                # E mudar também quando pedir o other neighbour
                 if otherNeighbour != "":
                     self.bestNeighbour = otherNeighbour
                     greenPrint(f"[INFO] New best neighbour: {self.bestNeighbour}")
@@ -379,6 +379,7 @@ class oNode:
                 self.bestNeighbour = self.determineBestNeighbour()
                 greenPrint(f"[INFO] New best neighbour: {self.bestNeighbour}")
             else:
+                # TODO: Enviar SVR para o antigo melhor vizinho, caso o mesmo esteja ativo ainda
                 self.bestNeighbour = newBestNeighbourIP
                 greenPrint(f"[INFO] New best neighbour: {self.bestNeighbour}")
 
@@ -387,14 +388,16 @@ class oNode:
             for video, info in self.streamedVideos.items():
                 if info["Streaming"] != "FALSE":
                     videoListToRequest.append(video)
-
-        self.requestVideoFromNeighbour(videoListToRequest)
+        if videoListToRequest:
+            self.requestVideoFromNeighbour(videoListToRequest)
 
         with self.bestNeighbourLock:
             bestNeighbourIP = self.bestNeighbour
         currentLatency = float("inf")
         with self.routingTableLock:
-            if bestNeighbourIP != "":
+            if bestNeighbourIP not in self.routingTable.keys():
+                currentLatency = float("inf")
+            else:
                 currentLatency = self.routingTable[bestNeighbourIP]["LT"]
         with self.latencyLock:
             self.latency = currentLatency
@@ -438,7 +441,6 @@ class oNode:
         """
         greyPrint("Only one neighbour available. Requesting an additional neighbour.")
         onlyOneNeighbour = True
-
         while onlyOneNeighbour:
             with self.neighboursLock:
                 if len(self.neighbours) == 1:
@@ -460,15 +462,17 @@ class oNode:
                 response = pickle.loads(ssocket.recv(4096))
                 newNeighbour = response.getData().get("BestNeighbour", "")
 
-
                 if newNeighbour == self.ip:
-                    redPrint("[WARN] I'm the best neighbour of my only neighbour. Skipping...")
+                    redPrint("[WARN] I'm the best neighbour of my only neighbour.")
+                elif newNeighbour == "":
+                    redPrint("[WARN] My neighbour has no neighbours.")
+                elif newNeighbour == "Server":
+                    greyPrint("[DATA] Already talking to the server directly")
                 else:
                     with self.otherNeighbourLock:
                         if self.otherNeighbourOption != newNeighbour:
                             self.otherNeighbourOption = newNeighbour
                             greenPrint(f"[INFO] Updated otherNeighbourOption: {newNeighbour}")
-                
             except Exception as e:
                 redPrint(f"[ERROR] Failed to request additional neighbours from {neighbourIP}: {e}")
             finally:
@@ -499,7 +503,6 @@ class oNode:
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ssocket:
                 ssocket.connect((neighbourIP, ports.NODE_VIDEO_REQUEST_PORT))
-                # TODO: Mudar para uma lista de vídeos, e não só um
                 data = {"videoList": videoList}
                 videoRequestPacket = TcpPacket("SVR", data)  # Stop Video Request
                 ssocket.send(pickle.dumps(videoRequestPacket))
@@ -537,13 +540,12 @@ class oNode:
             streamedVideos = self.streamedVideos.copy()
         videosToRequest = []
         for video_id in videoList:
-            if video_id in streamedVideos.keys() and streamedVideos[video_id]["Streaming"] == "TRUE":
+            if video_id in streamedVideos.keys() and streamedVideos[video_id]["Streaming"] != "FALSE":
                 greenPrint(f"[INFO] Forwarding video {video_id} to {neighbourIP}")
                 with self.streamedVideosLock:
                     if neighbourIP not in self.streamedVideos[video_id]["Neighbours"]:
                         self.streamedVideos[video_id]["Neighbours"].append(neighbourIP)
             else:
-                # TODO: If pending, sleep and wait a bit
                 greenPrint(f"[INFO] Requesting video {video_id} from best neighbour")
                 with self.streamedVideosLock:
                     self.streamedVideos[video_id] = {"Streaming": "PENDING", "Neighbours": [neighbourIP]}
@@ -608,7 +610,8 @@ class oNode:
         Função que envia o melhor vizinho atual do Node.
         """
         response = TcpPacket("R")
-        bestNeighbour = self.getBestNeighbour()  # TODO: Verificar se uso getBestNeighbour (??) ou se envio mesmo o self.bestNeighbour <-
+        with self.bestNeighbourLock:
+            bestNeighbour = self.bestNeighbour
         response.addData({"BestNeighbour": bestNeighbour})
         nodeSocket.sendall(pickle.dumps(response))
         nodeSocket.close()
