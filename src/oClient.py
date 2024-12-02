@@ -87,9 +87,7 @@ class Client:
                     if latency <= lowestLatency:
                         lowestLatency = latency
                         bestPoP = popIp
-                with self.bestPoPLock:
-                    self.switchBestPoP(bestPoP)
-                    greenPrint(f"[DATA] Best PoP: {self.bestPoP}")
+                self.switchBestPoP(bestPoP)
             else:
                 greyPrint(f"[WARN] No valid latencies received. Trying again in {ut.CLIENT_NO_POP_WAIT_TIME} seconds.")
                 time.sleep(ut.CLIENT_NO_POP_WAIT_TIME)
@@ -100,6 +98,7 @@ class Client:
             self.bestPoP = bestPoP
         if oldPoP != "":
             threading.Thread(target=self.requestStopVideo, args=(oldPoP,)).start()
+        greenPrint(f"[DATA] Best PoP: {self.bestPoP}")
 
     def requestVideo(self) -> None:
         """
