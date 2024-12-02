@@ -4,7 +4,7 @@ from datetime import datetime
 NODE_PING_INTERVAL = 3
 NODE_RESPONSE_WARNING = 4
 NODE_RESPONSE_TIMEOUT = 7
-CLIENT_NO_POP_WAIT_TIME = 5
+CLIENT_NO_POP_WAIT_TIME = 1
 NODE_NO_NEIGHBOUR_WAIT_TIME = 2
 CLIENT_VIDEO_REQUEST_WAIT_TIME = 2
 BEST_NEIGHBOUR_REQUEST_INTERVAL = 10
@@ -23,7 +23,6 @@ def nodePastTimeout(nodeLastestTimestamp: float) -> str:
 	:returns: "OK", "WARN" ou "NOTACTIVE".
 	"""
 	timeDiff = time.time() - nodeLastestTimestamp
-
 	if timeDiff < NODE_RESPONSE_WARNING:
 		return "OK"
 	elif timeDiff < NODE_RESPONSE_TIMEOUT:

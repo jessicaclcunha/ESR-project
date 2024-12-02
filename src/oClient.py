@@ -96,7 +96,7 @@ class Client:
         with self.bestPoPLock:
             oldPoP = self.bestPoP
             self.bestPoP = bestPoP
-        if oldPoP != "":
+        if oldPoP != "" and oldPoP != bestPoP:
             threading.Thread(target=self.requestStopVideo, args=(oldPoP,)).start()
         greenPrint(f"[DATA] Best PoP: {self.bestPoP}")
 
