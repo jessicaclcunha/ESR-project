@@ -118,6 +118,7 @@ class Client:
                     with self.bestPoPLock:
                         self.bestPoP = bestPoP
                         greenPrint(f"[DATA] Best PoP: {self.bestPoP}")
+                    self.requestVideo()
                     threading.Thread(target=self.requestStopVideo, args=(oldPoP,)).start()
             elif oldPoP not in popLatencies.keys() and bestPoP in popLatencies.keys():
                 with self.bestPoPLock:
