@@ -57,11 +57,14 @@ class Servidor:
                         greyPrint(f"[WARN] Neighbor {ip} is not responding. Trying again")
                     elif timeDiff == "NOTACTIVE":
                         self.neighbours.pop(ip, None)
+                        greenPrint(f"[INFO] Neighbor {ip} removed")
                         for video_id, videoInfo in self.videos.items():
                             if ip in videoInfo["Neighbours"]:
                                 self.videos[video_id]["Neighbours"].remove(ip)
+                                greenPrint(f"[INFO] Stopped streaming video {video_id} to {ip}.")
                                 if len(self.videos[video_id]["Neighbours"]) == 0:
                                     self.videos[video_id]["Streaming"] = False
+                                    greenPrint(f"[INFO] Stopped streaming video {video_id}")
             time.sleep(ut.NODE_ROUTING_TABLE_MONITORING_INTERVAL)
 
     def nodeGeneralRequestManager(self) -> None:
