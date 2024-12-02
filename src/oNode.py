@@ -211,32 +211,26 @@ class oNode:
             # TODO: hopsToServer = packet.getData().get("hops", 2**31-1)
             greenPrint(f"[INFO] Hello Packet received from  neighbour {neighbour}")
             greenPrint(f"[DATA] Latency to neighbour {neighbour}: {latency}")
-            inTopology = True
             onlyNeighbour = False
-            with self.topologyNeighboursLock:
-                if neighbour not in self.topologyNeighbours:
-                    redPrint(f"[ATTENTION] Non expected Hello Packet recieved from {neighbour}")
-                    inTopology = False
-            if inTopology:
-                with self.neighboursLock:
-                    if neighbour not in self.neighbours:
-                        self.neighbours.append(neighbour)
-                        greenPrint(f"[DATA] Neighbour {neighbour} just appeared and was added to the active neighbour list.")
-                    # TODO: Remove this, add it to the routingTable below and then the other thread does this
-                    if len(self.neighbours) == 1:
-                        onlyNeighbour = True
-                with self.routingTableLock:
-                    if neighbour not in self.routingTable.keys():
-                        # TODO: Send and recieve number of hops too
-                        self.routingTable[neighbour] = {"LT": latency,"LS":time.time(), "hops": 2**31-1}
-                    else:
-                        self.routingTable[neighbour]["LT"] = latency
-                        self.routingTable[neighbour]["LS"] = time.time()
-                with self.bestNeighbourLock:
-                    bestNeighbour = self.bestNeighbour
-                if bestNeighbour == neighbour:
-                    with self.latencyLock:
-                        self.latency = latency
+            with self.neighboursLock:
+                if neighbour not in self.neighbours:
+                    self.neighbours.append(neighbour)
+                    greenPrint(f"[DATA] Neighbour {neighbour} just appeared and was added to the active neighbour list.")
+                # TODO: Remove this, add it to the routingTable below and then the other thread does this
+                if len(self.neighbours) == 1:
+                    onlyNeighbour = True
+            with self.routingTableLock:
+                if neighbour not in self.routingTable.keys():
+                    # TODO: Send and recieve number of hops too
+                    self.routingTable[neighbour] = {"LT": latency,"LS": recievingTime, "hops": 2**31-1}
+                else:
+                    self.routingTable[neighbour]["LT"] = latency  # Latency
+                    self.routingTable[neighbour]["LS"] = recievingTime  # Last Seen
+            with self.bestNeighbourLock:
+                bestNeighbour = self.bestNeighbour
+            if bestNeighbour == neighbour:
+                with self.latencyLock:
+                    self.latency = latency
             if onlyNeighbour:
                 self.switchBestNeighbour(neighbour)
         elif messageType == "FLOOD":
@@ -257,7 +251,7 @@ class oNode:
             hops = packet.getData()["hops"]
             greenPrint(f"[INFO] FLOOD Packet received from neighbour {neighbour} with latency {latency} and {hops} hops")
             with self.routingTableLock:
-                self.routingTable[neighbour] = {"LT": latency, "LS": time.time(), "hops": hops}
+                self.routingTable[neighbour] = {"LT": latency, "LS": recievingTime, "hops": hops}
                 print(self.routingTable)  # TODO: Debug, eliminar ou meter um print mais bonito
             with self.neighboursLock:
                 if neighbour not in self.neighbours:
@@ -316,6 +310,12 @@ class oNode:
                 with self.neighboursLock:
                     if ip in self.neighbours:
                         self.neighbours.remove(ip)
+                with self.streamedVideosLock:
+                    for video_id, videoInfo in self.streamedVideos.items():
+                        if ip in videoInfo["Neighbours"]:
+                            self.streamedVideos[video_id]["Neighbours"].remove(ip)
+                            if len(self.streamedVideos[video_id]["Neighbours"]) == 0:
+                                self.streamedVideos[video_id]["Streaming"] = "FALSE"
                 redPrint(f"[WARN] Neighbor {ip} removed due to timeout")
 
             neighbours = []
@@ -414,7 +414,7 @@ class oNode:
         bestNeighbour = ""
         with self.routingTableLock:
             for neighbour, info in self.routingTable.items():
-                if info["LT"] < minLatency:
+                if info["LT"] <= minLatency:
                     minLatency = info["LT"]
                     bestNeighbour = neighbour
         return bestNeighbour

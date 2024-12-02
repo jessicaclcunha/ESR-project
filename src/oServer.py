@@ -18,7 +18,7 @@ class Servidor:
     def __init__(self) -> None:
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.ip = None
-        self.neighbours = []
+        self.neighbours = {}  # "IP": {"LS":Time}
         self.neighboursLock = threading.Lock()
         self.topologyNeighbours = []
         self.topologyNeighboursLock = threading.Lock()
@@ -34,6 +34,7 @@ class Servidor:
         threading.Thread(target=self.nodeRequestManager).start()
         threading.Thread(target=self.nodeConnectionManager).start()
         threading.Thread(target=self.nodeGeneralRequestManager).start()
+        threading.Thread(target=self.neighbourTableMonitoring).start()
         self.startVideoThreads()
 
     def startVideoThreads(self):
@@ -42,6 +43,26 @@ class Servidor:
         """
         for video in self.videos:
             threading.Thread(target=self.streamVideo, args=(video,)).start()
+
+    def neighbourTableMonitoring(self) -> None:
+        """
+        Função responsável por monitorizar a tabela de vizinhos.
+        """
+        greenPrint("[INFO] Neighbour table monitoring thread started")
+        while True:
+            with self.neighboursLock:
+                for ip, lastSeen in self.neighbours.items():
+                    timeDiff = ut.nodePastTimeout(lastSeen)
+                    if timeDiff == "WARN":
+                        greyPrint(f"[WARN] Neighbor {ip} is not responding. Trying again")
+                    elif timeDiff == "NOTACTIVE":
+                        self.neighbours.pop(ip, None)
+                        for video_id, videoInfo in self.videos.items():
+                            if ip in videoInfo["Neighbours"]:
+                                self.videos[video_id]["Neighbours"].remove(ip)
+                                if len(self.videos[video_id]["Neighbours"]) == 0:
+                                    self.videos[video_id]["Streaming"] = False
+            time.sleep(ut.NODE_ROUTING_TABLE_MONITORING_INTERVAL)
 
     def nodeGeneralRequestManager(self) -> None:
         """
@@ -97,16 +118,10 @@ class Servidor:
 
         if messageType == "HP":
             greenPrint(f"[INFO] Hello Packet received from  neighbour {neighbour}")
-            inTopology = True
-            with self.topologyNeighboursLock:
-                if neighbour not in self.topologyNeighbours:
-                    redPrint(f"[ATTENTION] Non expected Hello Packet recieved from {neighbour}")
-                    inTopology = False
-            if inTopology:
-                with self.neighboursLock:
-                    if neighbour not in self.neighbours:
-                        self.neighbours.append(neighbour)
-                        greenPrint(f"[DATA] Neighbour {neighbour} just appeared and was added to the active neighbour list.")
+            with self.neighboursLock:
+                if neighbour not in self.neighbours.keys():
+                    greenPrint(f"[DATA] Neighbour {neighbour} just appeared and was added to the active neighbour list.")
+                self.neighbours[neighbour] = time.time()
 
     def nodeRequestManager(self):
         """
@@ -227,7 +242,7 @@ class Servidor:
             with self.topologyNeighboursLock:
                 topologyNeighbours = self.topologyNeighbours.copy()
             with self.neighboursLock:
-                activeNeighbours = self.neighbours.copy()
+                activeNeighbours = self.neighbours.keys()
 
             neighbours = list(set(topologyNeighbours) | set(activeNeighbours))  # Lista de vizinhos sem repetidos
             ssocket = None
