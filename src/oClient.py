@@ -10,7 +10,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import utils.time as ut
 import utils.ports as ports
 from packets.TcpPacket import TcpPacket
-from packets.RtpPacket import RtpPacket
 import ClienteGUI as cg
 from utils.colors import greenPrint, redPrint, greyPrint
 
@@ -29,7 +28,7 @@ class Client:
         """
         greenPrint(f"[INFO] Client started")
         self.registerWithBootstrapper()
-        self.findBestPoP()
+        threading.Thread(target=self.findBestPoP).start() 
         self.requestVideo()
         self.displayVideo()
 
@@ -59,8 +58,7 @@ class Client:
         """
         Função que comunica com os PoPs e escolhe o que tem a menor latência.
         """
-        noPoP = True
-        while noPoP:
+        while True:
             popLatencies = {}
             for popIp in self.popList:
                 greenPrint(f"[INFO] Connecting to {popIp}:{ports.NODE_CLIENT_LISTENING_PORT}")
@@ -69,12 +67,12 @@ class Client:
                         message = TcpPacket("LR")
                         serializedMessage = pickle.dumps(message)
                         sUDPsocket.sendto(serializedMessage, (popIp, ports.NODE_CLIENT_LISTENING_PORT))
-
                         sUDPsocket.settimeout(2)
                         data, _ = sUDPsocket.recvfrom(4096)
+                        recievingTime = time.time()
                         packet = pickle.loads(data)
-                        # TODO: Adicionar a esta latency a latency do PoP para mim, pode ser obtifo com o packet.getTimestamp(), verificar
-                        latency = packet.getData().get('Latency', float('inf'))
+                        latencyPoPToServer = packet.getData().get('Latency', float('inf'))
+                        latency = latencyPoPToServer + (recievingTime - packet.getTimestamp())
                         greenPrint(f"[DATA] Latency to {popIp}: {latency}")
                         popLatencies[popIp] = latency
                 except socket.timeout:
@@ -83,22 +81,25 @@ class Client:
                     redPrint(f"[ERROR] {e}")
 
             if popLatencies:
-                noPoP = False
-                bestPoP = None
+                bestPoP = ""
                 lowestLatency = float("inf")
-                
                 for popIp, latency in popLatencies.items():
                     if latency <= lowestLatency:
                         lowestLatency = latency
                         bestPoP = popIp
-
                 with self.bestPoPLock:
-                    if bestPoP is not None:
-                        self.bestPoP = bestPoP
+                    self.switchBestPoP(bestPoP)
                     greenPrint(f"[DATA] Best PoP: {self.bestPoP}")
             else:
                 greyPrint(f"[WARN] No valid latencies received. Trying again in {ut.CLIENT_NO_POP_WAIT_TIME} seconds.")
                 time.sleep(ut.CLIENT_NO_POP_WAIT_TIME)
+
+    def switchBestPoP(self, bestPoP:str) -> None:
+        with self.bestPoPLock:
+            oldPoP = self.bestPoP
+            self.bestPoP = bestPoP
+        if oldPoP != "":
+            threading.Thread(target=self.requestStopVideo, args=(oldPoP,)).start()
 
     def requestVideo(self) -> None:
         """
@@ -116,10 +117,8 @@ class Client:
                 greenPrint(f"[INFO] Requesting video {self.video} to {bestPoP}")
                 try:
                     sUDPsocket.sendto(serializedPacket, (bestPoP, ports.NODE_CLIENT_LISTENING_PORT))
-
                     data, addr = sUDPsocket.recvfrom(4096)
                     response = pickle.loads(data)
-
                     if response.getMessageType() == "VRACK" and addr[0] == bestPoP:
                         greenPrint(f"[INFO] VRACK recieved from {bestPoP}.")
                         notAcknowledged = False
@@ -130,7 +129,7 @@ class Client:
                     redPrint(f"[ERROR] Error during video request: {e}")
                     break
 
-    def requestStopVideo(self, bestPoP:str) -> None:
+    def requestStopVideo(self, pop:str) -> None:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sUDPsocket:
             sUDPsocket.settimeout(2)
             data = { 'video_id' : self.video }
@@ -139,19 +138,17 @@ class Client:
 
             notAcknowledged = True
             while notAcknowledged:
-                greenPrint(f"[INFO] Requesting video stop to {bestPoP}")
+                greenPrint(f"[INFO] Requesting video stop to {pop}")
                 try:
-                    sUDPsocket.sendto(serializedPacket, (bestPoP, ports.NODE_CLIENT_LISTENING_PORT))
+                    sUDPsocket.sendto(serializedPacket, (pop, ports.NODE_CLIENT_LISTENING_PORT))
                     data, addr = sUDPsocket.recvfrom(4096)
                     response = pickle.loads(data)
-
-                    if response.getMessageType() == "SVRACK" and addr[0] == bestPoP:
-                        greenPrint(f"[INFO] VRACK recieved from {bestPoP}.")
+                    if response.getMessageType() == "SVRACK" and addr[0] == pop:
+                        greenPrint(f"[INFO] VRACK recieved from {pop}.")
                         notAcknowledged = False
-
-                    greenPrint(f"[INFO] Video stop request sent to {bestPoP}.")
+                    greenPrint(f"[INFO] Video stop request sent to {pop}.")
                 except socket.timeout:
-                    greyPrint(f"[WARN] Video stop request to {bestPoP} timed out. Trying again in {ut.CLIENT_VIDEO_REQUEST_WAIT_TIME} seconds.")
+                    greyPrint(f"[WARN] Video stop request to {pop} timed out. Trying again in {ut.CLIENT_VIDEO_REQUEST_WAIT_TIME} seconds.")
                     time.sleep(ut.CLIENT_VIDEO_REQUEST_WAIT_TIME)
 
     def getBestPoP(self) -> str:
@@ -179,6 +176,5 @@ if __name__ == "__main__":
         sys.exit(1)
 
     video = sys.argv[1]
-
     client = Client(video)
     client.startClient()

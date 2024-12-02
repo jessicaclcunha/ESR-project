@@ -440,7 +440,7 @@ class oNode:
         Solicita o melhor vizinho do nosso único vizinho disponível.
         """
         greyPrint("Only one neighbour available. Requesting an additional neighbour.")
-        onlyOneNeighbour = False
+        onlyOneNeighbour = True
         while onlyOneNeighbour:
             with self.neighboursLock:
                 if len(self.neighbours) == 1:
@@ -538,6 +538,8 @@ class oNode:
         """
         Função responsável por iniciar a transmissão do video para um vizinho.
         """
+        if neighbourIP == self.getBestNeighbour():
+            return
         with self.streamedVideosLock:
             streamedVideos = self.streamedVideos.copy()
         videosToRequest = []
