@@ -61,6 +61,8 @@ class Client:
         Função que comunica com os PoPs e escolhe o que tem a menor latência.
         """
         popRetries = {}  # "Ip": Number of timeouts
+        for popIp in self.popList:
+            popRetries[popIp] = 0
         while True:
             for popIp in self.popList:
                 greenPrint(f"[INFO] Connecting to {popIp}:{ports.NODE_CLIENT_LISTENING_PORT}")
@@ -84,7 +86,8 @@ class Client:
                     popRetries[popIp] += 1
                     if popRetries[popIp] >= 2:
                         with self.popLatenciesLock:
-                            self.popLatencies.pop(popIp, None)
+                            if popIp in self.popLatencies.keys():
+                                self.popLatencies.pop(popIp, None)
                     greyPrint(f"[WARN] PoP {popIp} did not respond.")
                 except socket.error as e:
                     redPrint(f"[ERROR] {e}")
