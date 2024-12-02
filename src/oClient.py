@@ -19,6 +19,8 @@ class Client:
         self.ip = None
         self.video = video
         self.popList = []
+        self.popLatencies = {}
+        self.popLatenciesLock = threading.Lock()
         self.bestPoP = ""
         self.bestPoPLock = threading.Lock()
 
@@ -58,8 +60,8 @@ class Client:
         """
         Função que comunica com os PoPs e escolhe o que tem a menor latência.
         """
+        popRetries = {}  # "Ip": Number of timeouts
         while True:
-            popLatencies = {}
             for popIp in self.popList:
                 greenPrint(f"[INFO] Connecting to {popIp}:{ports.NODE_CLIENT_LISTENING_PORT}")
                 try:
@@ -69,17 +71,26 @@ class Client:
                         sUDPsocket.sendto(serializedMessage, (popIp, ports.NODE_CLIENT_LISTENING_PORT))
                         sUDPsocket.settimeout(2)
                         data, _ = sUDPsocket.recvfrom(4096)
+                        popRetries[popIp] = 0
                         recievingTime = time.time()
                         packet = pickle.loads(data)
                         latencyPoPToServer = packet.getData().get('Latency', float('inf'))
                         latency = latencyPoPToServer + (recievingTime - packet.getTimestamp())
                         greenPrint(f"[DATA] Latency to {popIp}: {latency}")
-                        popLatencies[popIp] = latency
+                        with self.popLatenciesLock:
+                            self.popLatencies[popIp] = latency
                 except socket.timeout:
+                    # TODO: Mudar para fazer isto no recieveVideo maybe
+                    popRetries[popIp] += 1
+                    if popRetries[popIp] >= 2:
+                        with self.popLatenciesLock:
+                            self.popLatencies.pop(popIp, None)
                     greyPrint(f"[WARN] PoP {popIp} did not respond.")
                 except socket.error as e:
                     redPrint(f"[ERROR] {e}")
 
+            with self.popLatenciesLock:
+                popLatencies = self.popLatencies
             if popLatencies:
                 bestPoP = ""
                 lowestLatency = float("inf")
@@ -88,6 +99,7 @@ class Client:
                         lowestLatency = latency
                         bestPoP = popIp
                 self.switchBestPoP(bestPoP)
+                time.sleep(ut.CLIENT_POP_UPDATE_TIME)
             else:
                 greyPrint(f"[WARN] No valid latencies received. Trying again in {ut.CLIENT_NO_POP_WAIT_TIME} seconds.")
                 time.sleep(ut.CLIENT_NO_POP_WAIT_TIME)
@@ -95,10 +107,19 @@ class Client:
     def switchBestPoP(self, bestPoP:str) -> None:
         with self.bestPoPLock:
             oldPoP = self.bestPoP
-            self.bestPoP = bestPoP
-        if oldPoP != "" and oldPoP != bestPoP:
-            threading.Thread(target=self.requestStopVideo, args=(oldPoP,)).start()
-        greenPrint(f"[DATA] Best PoP: {self.bestPoP}")
+        if oldPoP != bestPoP:
+            with self.popLatenciesLock:
+                popLatencies = self.popLatencies
+            if oldPoP in popLatencies.keys() and bestPoP in popLatencies.keys():
+                if popLatencies[oldPoP] - popLatencies[bestPoP] > ut.NOTICIBLE_LATENCY_DIFF:
+                    with self.bestPoPLock:
+                        self.bestPoP = bestPoP
+                        greenPrint(f"[DATA] Best PoP: {self.bestPoP}")
+                    threading.Thread(target=self.requestStopVideo, args=(oldPoP,)).start()
+            elif oldPoP not in popLatencies.keys() and bestPoP in popLatencies.keys():
+                with self.bestPoPLock:
+                    self.bestPoP = bestPoP
+                greenPrint(f"[DATA] Best PoP: {self.bestPoP}")
 
     def requestVideo(self) -> None:
         """
