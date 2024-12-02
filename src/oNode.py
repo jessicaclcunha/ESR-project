@@ -440,11 +440,13 @@ class oNode:
         Solicita o melhor vizinho do nosso único vizinho disponível.
         """
         greyPrint("Only one neighbour available. Requesting an additional neighbour.")
-        onlyOneNeighbour = True
+        onlyOneNeighbour = False
         while onlyOneNeighbour:
             with self.neighboursLock:
                 if len(self.neighbours) == 1:
                     onlyOneNeighbour = True
+                elif len(self.neighbours) > 1:
+                    onlyOneNeighbour = False
             if not onlyOneNeighbour:
                 with self.requestedOtherNeighbourLock:
                     self.requestedOtherNeighbour = False
