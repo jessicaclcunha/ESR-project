@@ -244,6 +244,9 @@ class oNode:
             with self.routingTableLock:
                 if bestNeighbour == "" or latency < self.routingTable[bestNeighbour]["LT"]:
                     isBest = True
+            with self.neighboursLock:
+                if neighbour not in self.neighbours:
+                    self.neighbours.append(neighbour)
             if isBest:
                 data = packet.getData()
                 data["hops"] += 1
@@ -256,9 +259,6 @@ class oNode:
             with self.routingTableLock:
                 self.routingTable[neighbour] = {"LT": latency, "LS": recievingTime, "hops": hops}
                 print(self.routingTable)  # TODO: Debug, eliminar ou meter um print mais bonito
-            with self.neighboursLock:
-                if neighbour not in self.neighbours:
-                    self.neighbours.append(neighbour)
 
     def propagateFlood(self, floodPacket: TcpPacket, originNeighbour: str) -> None:
         """
@@ -399,9 +399,7 @@ class oNode:
             bestNeighbourIP = self.bestNeighbour
         currentLatency = float("inf")
         with self.routingTableLock:
-            if bestNeighbourIP not in self.routingTable.keys():
-                currentLatency = float("inf")
-            else:
+            if bestNeighbourIP in self.routingTable.keys():
                 currentLatency = self.routingTable[bestNeighbourIP]["LT"]
         with self.latencyLock:
             self.latency = currentLatency
