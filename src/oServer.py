@@ -50,21 +50,29 @@ class Servidor:
         """
         greenPrint("[INFO] Neighbour table monitoring thread started")
         while True:
+            neighboursToRemove = []
             with self.neighboursLock:
                 for ip, lastSeen in self.neighbours.items():
                     timeDiff = ut.nodePastTimeout(lastSeen)
                     if timeDiff == "WARN":
                         greyPrint(f"[WARN] Neighbor {ip} is not responding. Trying again")
                     elif timeDiff == "NOTACTIVE":
-                        self.neighbours.pop(ip, None)
-                        greenPrint(f"[INFO] Neighbor {ip} removed")
-                        for video_id, videoInfo in self.videos.items():
-                            if ip in videoInfo["Neighbours"]:
-                                self.videos[video_id]["Neighbours"].remove(ip)
-                                greenPrint(f"[INFO] Stopped streaming video {video_id} to {ip}.")
-                                if len(self.videos[video_id]["Neighbours"]) == 0:
-                                    self.videos[video_id]["Streaming"] = False
-                                    greenPrint(f"[INFO] Stopped streaming video {video_id}")
+                        neighboursToRemove.append(ip)
+
+            videosToRemove = []
+            for ip in neighboursToRemove:
+                self.neighbours.pop(ip, None)
+                greenPrint(f"[INFO] Neighbor {ip} removed")
+                with self.videosLock:
+                    for video_id, videoInfo in self.videos.items():
+                        if ip in videoInfo["Neighbours"]:
+                            self.videos[video_id]["Neighbours"].remove(ip)
+                            greenPrint(f"[INFO] Stopped streaming video {video_id} to {ip}.")
+                        if len(self.videos[video_id]["Neighbours"]) == 0:
+                            videosToRemove.append(video_id)
+                    for video_id in videosToRemove:
+                        self.videos[video_id]["Streaming"] = False
+                        greenPrint(f"[INFO] Stopped streaming video {video_id}")
             time.sleep(ut.NODE_ROUTING_TABLE_MONITORING_INTERVAL)
 
     def nodeGeneralRequestManager(self) -> None:
@@ -193,7 +201,6 @@ class Servidor:
         """
         video_path = f"../videos/{video_id}.Mjpeg"
         print(video_id)
-        print(video_path)
         sequenceNumber = 0
         try:
             stream = VideoStream.VideoStream(video_path)
@@ -281,11 +288,12 @@ class Servidor:
             return
 
         try:
-            for video in os.listdir(videoDirectory):
-                if os.path.isfile(os.path.join(videoDirectory, video)):
-                    videoName = os.path.splitext(video)[0]
-                    self.videos[videoName] = {"Streaming": False, "Neighbours": []}
-                    greyPrint(f"[DATA] Loaded video {video}")
+            with self.videosLock:
+                for video in os.listdir(videoDirectory):
+                    if os.path.isfile(os.path.join(videoDirectory, video)):
+                        videoName = os.path.splitext(video)[0]
+                        self.videos[videoName] = {"Streaming": False, "Neighbours": []}
+                        greyPrint(f"[DATA] Loaded video {video}")
             greenPrint("[INFO] Loaded videos")
         except Exception as e:
             redPrint(f"[ERROR] Failed to load videos: {e}")
@@ -295,7 +303,7 @@ class Servidor:
         Função que inicia o flood da rede para os nós conhecerem o melhor caminho até ao servidor.
         """
         with self.topologyNeighboursLock:
-            topologyNeighbours = self.topologyNeighbours
+            topologyNeighbours = self.topologyNeighbours.copy()
 
         ssocket = None
         for neighbour in topologyNeighbours:
