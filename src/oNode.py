@@ -488,6 +488,8 @@ class oNode:
         neighbourIP = self.getBestNeighbour()
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ssocket:
+                ssocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
+                ssocket.bind((self.ip, ports.VIDEO_REQUEST_SENDER))
                 ssocket.connect((neighbourIP, ports.NODE_VIDEO_REQUEST_PORT))
                 data = {"videoList": videoList}
                 videoRequestPacket = TcpPacket("VR", data)  # Video Request 
@@ -504,6 +506,8 @@ class oNode:
         neighbourIP = self.getBestNeighbour()
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ssocket:
+                ssocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
+                ssocket.bind((self.ip, ports.VIDEO_REQUEST_SENDER))
                 ssocket.connect((neighbourIP, ports.NODE_VIDEO_REQUEST_PORT))
                 data = {"videoList": videoList}
                 videoRequestPacket = TcpPacket("SVR", data)  # Stop Video Request
