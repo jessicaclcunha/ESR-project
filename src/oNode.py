@@ -315,7 +315,8 @@ class oNode:
                     for video_id, videoInfo in self.streamedVideos.items():
                         if ip in videoInfo["Neighbours"]:
                             videosToRemoveNeighbourFrom.append(video_id)
-                self.stopStreamingVideo(videosToRemoveNeighbourFrom, ip)
+                if videosToRemoveNeighbourFrom:
+                    self.stopStreamingVideo(videosToRemoveNeighbourFrom, ip)
                 redPrint(f"[WARN] Neighbor {ip} removed due to timeout")
 
             neighbours = []
