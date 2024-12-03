@@ -185,16 +185,19 @@ class oNode:
         """
         greenPrint(f"[INFO] Neighbour monitoring thread started on port {ports.NODE_MONITORING_PORT}")
         lsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        lsocket.bind((self.ip, ports.NODE_MONITORING_PORT))
-        lsocket.listen()
+        try:
+            lsocket.bind((self.ip, ports.NODE_MONITORING_PORT))
+            lsocket.listen()
 
-        while True:
-            try:
-                nodeSocket , addr = lsocket.accept()
-                neighbourHandler = threading.Thread(target=self.neighbourConnectionHandler, args=(nodeSocket, addr,))
-                neighbourHandler.start()
-            except Exception as e:
-                redPrint(f"[ERROR] Error in neighbour monitoring: {e}")
+            while True:
+                try:
+                    nodeSocket , addr = lsocket.accept()
+                    neighbourHandler = threading.Thread(target=self.neighbourConnectionHandler, args=(nodeSocket, addr,))
+                    neighbourHandler.start()
+                except Exception as e:
+                    redPrint(f"[ERROR] Error in neighbour monitoring: {e}")
+        finally:
+            lsocket.close()
 
     def neighbourConnectionHandler(self, nodeSocket: socket.socket, addr: Tuple[str, int]) -> None:
         """
@@ -567,13 +570,16 @@ class oNode:
         Função responsável por receber os pedidos de vídeo dos vizinhos.
         """
         lsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        lsocket.bind((self.ip, ports.NODE_VIDEO_REQUEST_PORT))
-        lsocket.listen()
+        try:
+            lsocket.bind((self.ip, ports.NODE_VIDEO_REQUEST_PORT))
+            lsocket.listen()
 
-        while True:
-            nodeSocket, addr = lsocket.accept()
-            nodeRequestHandler = threading.Thread(target=self.nodeVideoRequestHandler, args=(nodeSocket, addr,))
-            nodeRequestHandler.start()
+            while True:
+                nodeSocket, addr = lsocket.accept()
+                nodeRequestHandler = threading.Thread(target=self.nodeVideoRequestHandler, args=(nodeSocket, addr,))
+                nodeRequestHandler.start()
+        finally:
+            lsocket.close()
 
     def nodeVideoRequestHandler(self, lsocket: socket.socket, addr: Tuple[str, int]) -> None:
         """
@@ -595,13 +601,16 @@ class oNode:
         Função responsável por receber os pedidos gerais dos vizinhos.
         """
         lsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        lsocket.bind((self.ip, ports.NODE_GENERAL_REQUEST_PORT))
-        lsocket.listen()
+        try:
+            lsocket.bind((self.ip, ports.NODE_GENERAL_REQUEST_PORT))
+            lsocket.listen()
 
-        while True:
-            nodeSocket, addr = lsocket.accept()
-            nodeRequestHandler = threading.Thread(target=self.nodeGeneralRequestHandler, args=(nodeSocket, addr))
-            nodeRequestHandler.start()
+            while True:
+                nodeSocket, addr = lsocket.accept()
+                nodeRequestHandler = threading.Thread(target=self.nodeGeneralRequestHandler, args=(nodeSocket, addr))
+                nodeRequestHandler.start()
+        finally:
+            lsocket.close()
 
     def nodeGeneralRequestHandler(self, nodeSocket: socket.socket, addr: Tuple[str, int]) -> None:
         """
