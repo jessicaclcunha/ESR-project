@@ -125,7 +125,10 @@ class oNode:
                     ssocket.bind((self.ip, ports.NODE_PING_PORT))
                     ssocket.connect((neighbourIP, ports.NODE_MONITORING_PORT))
                     with self.latencyLock:
-                        data = {"Latency": self.latency}  # TODO: "hops": self.hops
+                        myLatency = self.latency
+                    with self.bestNeighbourLock:
+                        myBestNeighbour = self.bestNeighbour
+                    data = {"Latency": myLatency, "BestNeighbour": myBestNeighbour}  # TODO: "hops": self.hops
                     helloPacket = TcpPacket("HP", data)
                     ssocket.send(pickle.dumps(helloPacket))
                 except ConnectionRefusedError:
@@ -222,13 +225,15 @@ class oNode:
                 # TODO: Remove this, add it to the routingTable below and then the other thread does this
                 if len(self.neighbours) == 1:
                     onlyNeighbour = True
+            neighbourBestNeighbour = packet.getData().get("BestNeighbour", "")
             with self.routingTableLock:
                 if neighbour not in self.routingTable.keys():
                     # TODO: Send and recieve number of hops too
-                    self.routingTable[neighbour] = {"LT": latency,"LS": recievingTime, "hops": 2**31-1}
+                    self.routingTable[neighbour] = {"LT": latency,"LS": recievingTime, "hops": 2**31-1, "BN": neighbourBestNeighbour}
                 else:
                     self.routingTable[neighbour]["LT"] = latency  # Latency
                     self.routingTable[neighbour]["LS"] = recievingTime  # Last Seen
+                    self.routingTable[neighbour]["BN"] = neighbourBestNeighbour  # Best Neighbour
             with self.bestNeighbourLock:
                 bestNeighbour = self.bestNeighbour
             if bestNeighbour == neighbour:
@@ -257,7 +262,7 @@ class oNode:
             hops = packet.getData()["hops"]
             greenPrint(f"[INFO] FLOOD Packet received from neighbour {neighbour} with latency {latency} and {hops} hops")
             with self.routingTableLock:
-                self.routingTable[neighbour] = {"LT": latency, "LS": recievingTime, "hops": hops}
+                self.routingTable[neighbour] = {"LT": latency, "LS": recievingTime, "hops": hops, "BN": ""}
                 print(self.routingTable)  # TODO: Debug, eliminar ou meter um print mais bonito
 
     def propagateFlood(self, floodPacket: TcpPacket, originNeighbour: str) -> None:
@@ -295,8 +300,11 @@ class oNode:
         Função responsável por monitorizar a tabela de routing e remover vizinhos inativos.
         """
         while True:
+            """
+            TOREMOVE maybe
             startThread = False
             onlyOneNeighbour = False
+            """
             neighboursToRemove = []
 
             with self.routingTableLock:
@@ -322,10 +330,12 @@ class oNode:
                     self.stopStreamingVideo(videosToRemoveNeighbourFrom, ip)
                 redPrint(f"[WARN] Neighbor {ip} removed due to timeout")
 
-            neighbours = []
             with self.neighboursLock:
                 if len(self.neighbours) == 1:
+                    """
+                    TOREMOVE maybe
                     onlyOneNeighbour = True
+                    """
                 neighbours = self.neighbours.copy()
 
             noNeighbours = len(neighbours) == 0
@@ -338,6 +348,8 @@ class oNode:
             elif noNeighbours:
                 self.switchBestNeighbour("")
 
+            """
+            TOREMOVE maybe
             with self.requestedOtherNeighbourLock:
                 if onlyOneNeighbour and not self.requestedOtherNeighbour:
                     self.requestedOtherNeighbour = True
@@ -345,6 +357,8 @@ class oNode:
 
             if startThread:
                 threading.Thread(target=self.requestAdditionalNeighbours).start()
+            """
+            self.verifyDangerSituation()
                  
                 # TODO: DEBUG, depois remover
             with self.bestNeighbourLock:
@@ -437,10 +451,12 @@ class oNode:
             greyPrint(f"[WARN] No neighbour available. Trying again in {ut.NODE_NO_NEIGHBOUR_WAIT_TIME} seconds.")
             time.sleep(ut.NODE_NO_NEIGHBOUR_WAIT_TIME)
                 
+    """
+    TOREMOVE maybe
     def requestAdditionalNeighbours(self) -> None:
         """
+    """
         Solicita o melhor vizinho do nosso único vizinho disponível.
-        """
         greyPrint("Only one neighbour available. Requesting an additional neighbour.")
         onlyOneNeighbour = True
         while onlyOneNeighbour:
@@ -482,6 +498,7 @@ class oNode:
             finally:
                 ssocket.close()
                 time.sleep(ut.BEST_NEIGHBOUR_REQUEST_INTERVAL)
+    """
     
     def requestVideoFromNeighbour(self, videoList:list) -> None:
         """
@@ -621,7 +638,31 @@ class oNode:
 
         if messageType == "BNR":  # Best Neighbour Request
             self.sendBestNeighbour(nodeSocket)
-            # TODO: Maybe avisar o nó que demos o IP dele, para ele estar à espera
+
+    def verifyDangerSituation(self) -> None:
+        """
+        Função responsável por verificar se o nó se encontra numa situação de perigo.
+        """
+        greyPrint("[INFO] Verifying danger situation")
+        differentStreamOptions = []
+        with self.bestNeighbourLock:
+            myBN = self.bestNeighbour
+        with self.routingTableLock:
+            for neighbourIP, neighbourInfo in self.routingTable.items():
+                if neighbourInfo["BN"] not in ["", myBN, self.ip] and neighbourInfo["LT"] != float('inf'):
+                    differentStreamOptions.append(neighbourIP)
+        streamOptions = len(differentStreamOptions)
+        if streamOptions < 2:
+            redPrint(f"[DANGER] {streamOptions} options to obtain the stream.")
+            if streamOptions == 1:
+                ono = ""
+                with self.routingTableLock:
+                    if differentStreamOptions[0] in self.routingTable.keys():
+                        ono = self.routingTable[differentStreamOptions[0]]["BN"]
+                if ono != "":
+                    with self.otherNeighbourLock:
+                        self.otherNeighbourOption = ono
+                        greenPrint(f"[INFO] Updated otherNeighbourOption: {ono}")
 
     def sendBestNeighbour(self, nodeSocket: socket.socket) -> None:
         """
