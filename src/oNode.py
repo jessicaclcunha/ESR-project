@@ -418,8 +418,7 @@ class oNode:
         bestNeighbour = ""
         with self.routingTableLock:
             for neighbour, info in self.routingTable.items():
-                diff = info["LT"] - minLatency
-                if diff < ut.NOTICIBLE_LATENCY_DIFF:
+                if info["LT"] + ut.NOTICIBLE_LATENCY_DIFF < minLatency:
                     minLatency = info["LT"]
                     bestNeighbour = neighbour
         return bestNeighbour
