@@ -164,7 +164,6 @@ class oNode:
         rtpPacket = RtpPacket()
         rtpPacket.decode(rtpPacketBytes)
         video_id = rtpPacket.getVideoId()
-        redPrint(f"[INFO] Video {video_id}")
 
         neighbours = []
         with self.streamedVideosLock:
@@ -176,6 +175,7 @@ class oNode:
         for neighbour in neighbours:
             try:
                 lsocket.sendto(rtpPacketBytes, (neighbour, ports.UDP_VIDEO_PORT))
+                redPrint(f"[INFO] Sending packet of video {video_id} to {neighbour}")
             except Exception as e:
                 redPrint(f"[ERROR] Error in video distribution to neighbour {neighbour}: {e}")
 
