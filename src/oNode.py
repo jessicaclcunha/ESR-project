@@ -539,7 +539,8 @@ class oNode:
                             stopStream = True
                 if stopStream:
                     videoStopList.append(video_id)
-            self.requestStopVideoFromNeighbour(videoStopList) 
+            if videoStopList:
+                self.requestStopVideoFromNeighbour(videoStopList) 
         except Exception as e:
             redPrint(f"[ERROR] Failed to stop streaming video(s) {videoList}: {e}")
 
@@ -563,7 +564,8 @@ class oNode:
                 with self.streamedVideosLock:
                     self.streamedVideos[video_id] = {"Streaming": "PENDING", "Neighbours": [neighbourIP]}
                 videosToRequest.append(video_id)
-        self.requestVideoFromNeighbour(videosToRequest)
+        if videosToRequest:
+            self.requestVideoFromNeighbour(videosToRequest)
     
     def nodeVideoRequestManager(self) -> None:
         """
