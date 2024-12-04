@@ -46,10 +46,6 @@ class oNode:
         threading.Thread(target=self.neighbourConnectionManagement).start()
         threading.Thread(target=self.neighbourPingSender).start()
         threading.Thread(target=self.nodeVideoRequestManager).start()
-        """ 
-        TOREMOVE maybe
-        threading.Thread(target=self.nodeGeneralRequestManager).start()
-        """
         threading.Thread(target=self.routingTableMonitoring).start()
         threading.Thread(target=self.nodeVideoHandler).start()
 
@@ -304,11 +300,6 @@ class oNode:
         Função responsável por monitorizar a tabela de routing e remover vizinhos inativos.
         """
         while True:
-            """
-            TOREMOVE maybe
-            startThread = False
-            onlyOneNeighbour = False
-            """
             neighboursToRemove = []
 
             with self.routingTableLock:
@@ -348,11 +339,6 @@ class oNode:
                     self.switchBestNeighbour("")
             else:
                 with self.neighboursLock:
-                    """
-                    if len(self.neighbours) == 1:
-                        TOREMOVE maybe
-                        onlyOneNeighbour = True
-                        """
                     neighbours = self.neighbours.copy()
                 noNeighbours = len(neighbours) == 0
                 bestActiveNeighbour = self.determineBestNeighbour()
@@ -407,7 +393,14 @@ class oNode:
         elif not bestNeighbourActive:
             bn = self.determineBestNeighbour()
         else:
-            # TODO: Enviar SVR para o antigo melhor vizinho, caso o mesmo esteja ativo ainda
+            with self.streamedVideosLock:
+                videosToRequestStop = []
+                for video_id, videoInfo in self.streamedVideos.items():
+                    if videoInfo["Streaming"] != "FALSE":
+                        videosToRequestStop.append(video_id)
+            with self.bestNeighbourLock:
+                currentBN = self.bestNeighbour
+            self.requestStopVideoFromNeighbour(videosToRequestStop, currentBN)
             bn = newBestNeighbourIP
         with self.bestNeighbourLock:
             self.bestNeighbour = bn
@@ -441,7 +434,6 @@ class oNode:
 
         :returns: IP do melhor vizinho
         """
-        # TODO: Maybe contar o número de saltos
         minLatency = float("inf")
         bestNeighbour = ""
         with self.routingTableLock:
@@ -457,7 +449,6 @@ class oNode:
             if not active or minLatency + ut.NOTICIBLE_LATENCY_DIFF < self.connectionInfo["LT"]:
                 self.connectionInfo["LT"] = minLatency
                 return bestNeighbour
-        
         with self.bestNeighbourLock:
             return self.bestNeighbour
     
@@ -494,12 +485,10 @@ class oNode:
         except Exception as e:
             redPrint(f"[ERROR] Failed to request video(s) {videoList} from {neighbourIP}: {e}")
 
-    def requestStopVideoFromNeighbour(self, videoList:list) -> None:
+    def requestStopVideoFromNeighbour(self, videoList:list, neighbourIP:str) -> None:
         """
         Solicita a paragem da stream do video ao melhor vizinho.
         """
-        # TODO: Change to get the neighbour from a input to the function
-        neighbourIP = self.getBestNeighbour()
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ssocket:
                 ssocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
@@ -531,7 +520,9 @@ class oNode:
                 if stopStream:
                     videoStopList.append(video_id)
             if videoStopList:
-                self.requestStopVideoFromNeighbour(videoStopList) 
+                with self.bestNeighbourLock:
+                    bn = self.bestNeighbour
+                self.requestStopVideoFromNeighbour(videoStopList, bn) 
         except Exception as e:
             redPrint(f"[ERROR] Failed to stop streaming video(s) {videoList}: {e}")
 
