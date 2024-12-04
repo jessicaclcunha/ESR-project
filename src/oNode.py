@@ -222,7 +222,6 @@ class oNode:
                 if neighbour not in self.neighbours:
                     self.neighbours.append(neighbour)
                     greenPrint(f"[DATA] Neighbour {neighbour} just appeared and was added to the active neighbour list.")
-                # TODO: Remove this, add it to the routingTable below and then the other thread does this
                 if len(self.neighbours) == 1:
                     onlyNeighbour = True
             neighbourBestNeighbour = packet.getData().get("BestNeighbour", "")
