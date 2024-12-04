@@ -260,7 +260,7 @@ class Servidor:
                     ssocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR,1)
                     ssocket.bind((self.ip, ports.NODE_PING_PORT))
                     ssocket.connect((neighbourIP, ports.NODE_MONITORING_PORT))
-                    data = {"Latency": 0, "BestNeighbour": "Server"}  # TODO: "hops":1
+                    data = {"Latency": 0, "hops": 1 ,"BestNeighbour": "Server"}
                     helloPacket = TcpPacket("HP", data)
                     ssocket.send(pickle.dumps(helloPacket))
                 except ConnectionRefusedError:

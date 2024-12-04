@@ -19,7 +19,6 @@ class oNode:
     def __init__(self) -> None:
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.ip = None
-        # TODO: Maybe muda self.latency para self.connectionInfo = {"LT":, "hops":}, etc.
         self.connectionInfo:dict = {"LT": float("inf"), "hops": 2**31-1}  # Latência e nr de saltos do Node até ao Servidor
         self.connectionInfoLock = threading.Lock()
         self.neighbours = [] # Vizinhos ativos
@@ -232,7 +231,6 @@ class oNode:
             neighbourBestNeighbour = packet.getData().get("BestNeighbour", "")
             with self.routingTableLock:
                 if neighbour not in self.routingTable.keys():
-                    # TODO: Send and recieve number of hops too
                     self.routingTable[neighbour] = {"LT": latency,"LS": recievingTime, "hops": hopsToServer, "BN": neighbourBestNeighbour}
                 else:
                     self.routingTable[neighbour]["LT"] = latency  # Latency
