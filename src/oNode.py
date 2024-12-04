@@ -340,22 +340,21 @@ class oNode:
                     with self.neighboursLock:
                         self.neighbours.append(myONO)
                     self.switchBestNeighbour(myONO)
-
-            with self.neighboursLock:
-                """
-                if len(self.neighbours) == 1:
-                    TOREMOVE maybe
-                    onlyOneNeighbour = True
+            else:
+                with self.neighboursLock:
                     """
-                neighbours = self.neighbours.copy()
-            noNeighbours = len(neighbours) == 0
-            bestActiveNeighbour = self.determineBestNeighbour()
-            newBestNeighbour = bestActiveNeighbour != currentBestNeighbour
-            if newBestNeighbour:
-                self.switchBestNeighbour(bestActiveNeighbour)
-            elif noNeighbours:
-                self.switchBestNeighbour("")
-
+                    if len(self.neighbours) == 1:
+                        TOREMOVE maybe
+                        onlyOneNeighbour = True
+                        """
+                    neighbours = self.neighbours.copy()
+                noNeighbours = len(neighbours) == 0
+                bestActiveNeighbour = self.determineBestNeighbour()
+                newBestNeighbour = bestActiveNeighbour != currentBestNeighbour
+                if newBestNeighbour:
+                    self.switchBestNeighbour(bestActiveNeighbour)
+                elif noNeighbours:
+                    self.switchBestNeighbour("")
             """
             TOREMOVE maybe
             with self.requestedOtherNeighbourLock:
