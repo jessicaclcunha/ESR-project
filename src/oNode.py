@@ -423,7 +423,8 @@ class oNode:
             if bestNeighbourIP in self.routingTable.keys():
                 currentLatency = self.routingTable[bestNeighbourIP]["LT"]
         with self.latencyLock:
-            self.latency = currentLatency
+            if currentLatency != float("inf"):
+                self.latency = currentLatency
 
     def determineBestNeighbour(self) -> str:
         """
