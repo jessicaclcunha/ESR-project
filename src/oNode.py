@@ -242,7 +242,7 @@ class oNode:
             if bestNeighbour == neighbour:
                 with self.connectionInfoLock:
                     self.connectionInfo["LT"] = latency
-                    self.connectionInfo["hops"] = hopsToServer
+                    self.connectionInfo["hops"] = hopsToServer + 1
             if onlyNeighbour:
                 self.switchBestNeighbour(neighbour)
         elif messageType == "FLOOD":
