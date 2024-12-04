@@ -6,6 +6,7 @@ import socket
 import threading
 
 from typing import Tuple
+from tabulate import tabulate
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import utils.time as ut
 import utils.ports as ports
@@ -271,7 +272,6 @@ class oNode:
             greenPrint(f"[INFO] FLOOD Packet received from neighbour {neighbour} with latency {latency} and {hops} hops")
             with self.routingTableLock:
                 self.routingTable[neighbour] = {"LT": latency, "LS": recievingTime, "hops": hops, "BN": ""}
-                print(self.routingTable)  # TODO: Debug, eliminar ou meter um print mais bonito
 
     def propagateFlood(self, floodPacket: TcpPacket, originNeighbour: str) -> None:
         """
@@ -370,7 +370,9 @@ class oNode:
             with self.bestNeighbourLock:
                 redPrint(f"[DATA] Best neighbour: {self.bestNeighbour}")
             with self.routingTableLock:
-                redPrint(f"[DATA] Routing Table: {self.routingTable}")
+                headers = ["Neighbour"] + list(next(iter(self.routingTable.values())).keys())
+                rows = [[neighbour] + list(neighbourInfo.values()) for neighbour, neighbourInfo in self.routingTable.items()]
+                print(tabulate(rows, headers=headers, tablefmt="fancy_grid"))
             with self.streamedVideosLock:
                 redPrint(f"[DATA] Streamed Videos: {self.streamedVideos}")
             time.sleep(ut.NODE_ROUTING_TABLE_MONITORING_INTERVAL)
