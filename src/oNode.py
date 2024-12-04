@@ -370,9 +370,12 @@ class oNode:
             with self.bestNeighbourLock:
                 redPrint(f"[DATA] Best neighbour: {self.bestNeighbour}")
             with self.routingTableLock:
-                headers = ["Neighbour"] + list(next(iter(self.routingTable.values())).keys())
-                rows = [[neighbour] + list(neighbourInfo.values()) for neighbour, neighbourInfo in self.routingTable.items()]
-                print(tabulate(rows, headers=headers, tablefmt="fancy_grid"))
+                if not self.routingTable:
+                    print("[INFO] Routing Table is empty")
+                else:
+                    headers = ["Neighbour"] + list(next(iter(self.routingTable.values())).keys())
+                    rows = [[neighbour] + list(neighbourInfo.values()) for neighbour, neighbourInfo in self.routingTable.items()]
+                    print(tabulate(rows, headers=headers, tablefmt="fancy_grid"))
             with self.streamedVideosLock:
                 redPrint(f"[DATA] Streamed Videos: {self.streamedVideos}")
             time.sleep(ut.NODE_ROUTING_TABLE_MONITORING_INTERVAL)
