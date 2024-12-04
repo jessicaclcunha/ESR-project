@@ -344,6 +344,8 @@ class oNode:
                     with self.neighboursLock:
                         self.neighbours.append(myONO)
                     self.switchBestNeighbour(myONO)
+                else:
+                    self.switchBestNeighbour("")
             else:
                 with self.neighboursLock:
                     """
@@ -448,8 +450,12 @@ class oNode:
                 if info["LT"] < minLatency:
                     minLatency = info["LT"]
                     bestNeighbour = neighbour
+        with self.bestNeighbourLock:
+            bn = self.bestNeighbour
+        with self.neighboursLock:
+            active = bn in self.neighbours
         with self.connectionInfoLock:
-            if minLatency + ut.NOTICIBLE_LATENCY_DIFF < self.connectionInfo["LT"]:
+            if not active or minLatency + ut.NOTICIBLE_LATENCY_DIFF < self.connectionInfo["LT"]:
                 self.connectionInfo["LT"] = minLatency
                 return bestNeighbour
         
