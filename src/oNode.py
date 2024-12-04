@@ -330,16 +330,6 @@ class oNode:
                     self.stopStreamingVideo(videosToRemoveNeighbourFrom, ip)
                 redPrint(f"[WARN] Neighbor {ip} removed due to timeout")
 
-            with self.neighboursLock:
-                """
-                if len(self.neighbours) == 1:
-                    TOREMOVE maybe
-                    onlyOneNeighbour = True
-                    """
-                neighbours = self.neighbours.copy()
-
-            noNeighbours = len(neighbours) == 0
-            bestActiveNeighbour = self.determineBestNeighbour()
             with self.bestNeighbourLock:
                 currentBestNeighbour = self.bestNeighbour
 
@@ -350,6 +340,16 @@ class oNode:
                     with self.neighboursLock:
                         self.neighbours.append(myONO)
                     self.switchBestNeighbour(myONO)
+
+            with self.neighboursLock:
+                """
+                if len(self.neighbours) == 1:
+                    TOREMOVE maybe
+                    onlyOneNeighbour = True
+                    """
+                neighbours = self.neighbours.copy()
+            noNeighbours = len(neighbours) == 0
+            bestActiveNeighbour = self.determineBestNeighbour()
             newBestNeighbour = bestActiveNeighbour != currentBestNeighbour
             if newBestNeighbour:
                 self.switchBestNeighbour(bestActiveNeighbour)
@@ -438,10 +438,16 @@ class oNode:
         bestNeighbour = ""
         with self.routingTableLock:
             for neighbour, info in self.routingTable.items():
-                if info["LT"] + ut.NOTICIBLE_LATENCY_DIFF < minLatency:
+                if info["LT"] < minLatency:
                     minLatency = info["LT"]
                     bestNeighbour = neighbour
-        return bestNeighbour
+        with self.latencyLock:
+            if minLatency + ut.NOTICIBLE_LATENCY_DIFF < self.latency:
+                self.latency = minLatency
+                return bestNeighbour
+        
+        with self.bestNeighbourLock:
+            return self.bestNeighbour
     
     def getBestNeighbour(self) -> str:
         """
