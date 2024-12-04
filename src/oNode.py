@@ -398,21 +398,20 @@ class oNode:
             bestNeighbourActive = newBestNeighbourIP in self.neighbours
         with self.otherNeighbourLock:
             otherNeighbour = self.otherNeighbourOption
-        with self.bestNeighbourLock:
-            if empty:
-                if otherNeighbour != "":
-                    self.bestNeighbour = otherNeighbour
-                    greenPrint(f"[INFO] New best neighbour: {self.bestNeighbour}")
-                else:
-                    self.bestNeighbour = ""
-                    redPrint("[ERROR] No neighbours available.")
-            elif not bestNeighbourActive:
-                self.bestNeighbour = self.determineBestNeighbour()
-                greenPrint(f"[INFO] New best neighbour: {self.bestNeighbour}")
+        if empty:
+            if otherNeighbour != "":
+                bn = otherNeighbour
             else:
-                # TODO: Enviar SVR para o antigo melhor vizinho, caso o mesmo esteja ativo ainda
-                self.bestNeighbour = newBestNeighbourIP
-                greenPrint(f"[INFO] New best neighbour: {self.bestNeighbour}")
+                bn = ""
+                redPrint("[ERROR] No neighbours available.")
+        elif not bestNeighbourActive:
+            bn = self.determineBestNeighbour()
+        else:
+            # TODO: Enviar SVR para o antigo melhor vizinho, caso o mesmo esteja ativo ainda
+            bn = newBestNeighbourIP
+        with self.bestNeighbourLock:
+            self.bestNeighbour = bn
+            greenPrint(f"[INFO] New best neighbour: {self.bestNeighbour}")
 
         videoListToRequest = []
         with self.streamedVideosLock:
