@@ -331,8 +331,8 @@ class oNode:
                 redPrint(f"[WARN] Neighbor {ip} removed due to timeout")
 
             with self.neighboursLock:
+                """
                 if len(self.neighbours) == 1:
-                    """
                     TOREMOVE maybe
                     onlyOneNeighbour = True
                     """
@@ -342,6 +342,14 @@ class oNode:
             bestActiveNeighbour = self.determineBestNeighbour()
             with self.bestNeighbourLock:
                 currentBestNeighbour = self.bestNeighbour
+
+            if currentBestNeighbour in neighboursToRemove:
+                with self.otherNeighbourLock:
+                    myONO = self.otherNeighbourOption
+                if myONO != "":
+                    with self.neighboursLock:
+                        self.neighbours.append(myONO)
+                    self.switchBestNeighbour(myONO)
             newBestNeighbour = bestActiveNeighbour != currentBestNeighbour
             if newBestNeighbour:
                 self.switchBestNeighbour(bestActiveNeighbour)
@@ -663,6 +671,10 @@ class oNode:
                     with self.otherNeighbourLock:
                         self.otherNeighbourOption = ono
                         greenPrint(f"[INFO] Updated otherNeighbourOption: {ono}")
+        else:
+            with self.otherNeighbourLock:
+                self.otherNeighbourOption = ""
+            greyPrint("[INFO] No danger situation")
 
     def sendBestNeighbour(self, nodeSocket: socket.socket) -> None:
         """
