@@ -219,8 +219,6 @@ class oNode:
             latencyNeighbourToServer = packet.getData().get("Latency", float('inf'))
             latency = latencyNeighbourToServer + (recievingTime - packet.getTimestamp())
             hopsToServer = packet.getData().get("hops", 2**31-1)
-            greenPrint(f"[INFO] Hello Packet received from  neighbour {neighbour}")
-            greenPrint(f"[DATA] Latency to neighbour {neighbour}: {latency}")
             onlyNeighbour = False
             with self.neighboursLock:
                 if neighbour not in self.neighbours:
