@@ -366,18 +366,24 @@ class oNode:
 
             self.verifyDangerSituation()
                  
-                # TODO: DEBUG, depois remover
             with self.bestNeighbourLock:
-                redPrint(f"[DATA] Best neighbour: {self.bestNeighbour}")
+                print(f"[DATA] Best neighbour: {self.bestNeighbour}")
             with self.routingTableLock:
                 if not self.routingTable:
-                    print("[INFO] Routing Table is empty")
+                    print("[DATA] Routing Table is empty")
                 else:
                     headers = ["Neighbour"] + list(next(iter(self.routingTable.values())).keys())
                     rows = [[neighbour] + list(neighbourInfo.values()) for neighbour, neighbourInfo in self.routingTable.items()]
+                    print("[DATA] Routing Table:")
                     print(tabulate(rows, headers=headers, tablefmt="fancy_grid"))
             with self.streamedVideosLock:
-                redPrint(f"[DATA] Streamed Videos: {self.streamedVideos}")
+                if not self.streamedVideos:
+                    print("[DATA] No videos are being streamed")
+                else:
+                    headers = ["Video"] + list(next(iter(self.streamedVideos.values())).keys())
+                    rows = [[video_id] + list(videoInfo.values()) for video_id, videoInfo in self.streamedVideos.items()]
+                    print("[DATA] Streamed Videos:")
+                    print(tabulate(rows, headers=headers, tablefmt="fancy_grid"))
             time.sleep(ut.NODE_ROUTING_TABLE_MONITORING_INTERVAL)
 
     def switchBestNeighbour(self, newBestNeighbourIP: str) -> None:
