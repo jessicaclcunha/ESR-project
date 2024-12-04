@@ -4,6 +4,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.time import formattedTime
 
+YELLOW = "\033[93m"
 GREEN = "\033[92m"
 RED = "\033[91m"
 GREY= "\033[90m"
@@ -27,3 +28,9 @@ def greyPrint(text: str) -> None:
 	Função que imprime a string em cinza.
 	"""
 	print(f"{GREY}[{formattedTime()}] {text}{RESET}")
+
+def yellowPrint(text: str) -> None:
+	"""
+	Função que imprime a string em amarelo.
+	"""
+	print(f"{YELLOW}[{formattedTime()}] {text}{RESET}")

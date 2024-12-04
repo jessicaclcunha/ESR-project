@@ -11,7 +11,7 @@ import utils.time as ut
 import utils.ports as ports
 from packets.TcpPacket import TcpPacket
 from packets.RtpPacket import RtpPacket
-from utils.colors import greenPrint, redPrint, greyPrint
+from utils.colors import greenPrint, redPrint, greyPrint, yellowPrint
 
 
 class oNode:
@@ -178,7 +178,7 @@ class oNode:
         for neighbour in neighbours:
             try:
                 lsocket.sendto(rtpPacketBytes, (neighbour, ports.UDP_VIDEO_PORT))
-                redPrint(f"[INFO] Sending packet of video {video_id} to {neighbour}")
+                yellowPrint(f"[INFO] Sending packet of video {video_id} to {neighbour}")
             except Exception as e:
                 redPrint(f"[ERROR] Error in video distribution to neighbour {neighbour}: {e}")
 

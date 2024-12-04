@@ -12,7 +12,7 @@ import utils.ports as ports
 import utils.VideoStream as VideoStream
 from packets.TcpPacket import TcpPacket
 from packets.RtpPacket import RtpPacket
-from utils.colors import greenPrint, redPrint, greyPrint
+from utils.colors import greenPrint, redPrint, greyPrint, yellowPrint
 
 class Servidor:
     def __init__(self) -> None:
@@ -67,12 +67,12 @@ class Servidor:
                     for video_id, videoInfo in self.videos.items():
                         if ip in videoInfo["Neighbours"]:
                             self.videos[video_id]["Neighbours"].remove(ip)
-                            greenPrint(f"[INFO] Stopped streaming video {video_id} to {ip}.")
+                            yellowPrint(f"[INFO] Stopped streaming video {video_id} to {ip}.")
                         if len(self.videos[video_id]["Neighbours"]) == 0:
                             videosToRemove.append(video_id)
                     for video_id in videosToRemove:
                         self.videos[video_id]["Streaming"] = False
-                        greenPrint(f"[INFO] Stopped streaming video {video_id}")
+                        yellowPrint(f"[INFO] Stopped streaming video {video_id}")
             time.sleep(ut.NODE_ROUTING_TABLE_MONITORING_INTERVAL)
 
     def nodeGeneralRequestManager(self) -> None:
@@ -94,7 +94,6 @@ class Servidor:
         """
         packet = pickle.loads(nodeSocket.recv(4096))
         messageType = packet.getMessageType()
-        greenPrint(f"[INFO] {messageType} request recieved from {addr[0]}")
 
         if messageType == "BNR":  # Best Neighbour Request
             packet = TcpPacket("R", {"BestNeighbour": "Server"})
@@ -128,10 +127,7 @@ class Servidor:
         neighbour = addr[0]
 
         if messageType == "HP":
-            greenPrint(f"[INFO] Hello Packet received from  neighbour {neighbour}")
             with self.neighboursLock:
-                if neighbour not in self.neighbours.keys():
-                    greenPrint(f"[DATA] Neighbour {neighbour} just appeared and was added to the active neighbour list.")
                 self.neighbours[neighbour] = time.time()
 
     def nodeRequestManager(self):
@@ -147,7 +143,7 @@ class Servidor:
                     nodeRequestHandler = threading.Thread(target=self.nodeRequestHandler, args=(nodeSocket, addr,))
                     nodeRequestHandler.start()
         except KeyboardInterrupt:
-            redPrint("[SHUTDOWN] Shutting down server...")
+            greyPrint("[SHUTDOWN] Shutting down server...")
         except Exception as e:
             redPrint(f"[ERROR] Could not start Server: {e}")
 
@@ -173,14 +169,14 @@ class Servidor:
         with self.videosLock:
             for video_id in videoList:
                 if video_id not in self.videos:
-                    redPrint(f"[ERROR] Vídeo {video_id} não está disponível.")
+                    redPrint(f"[ERROR] Video {video_id} not available.")
                 else:
-                    if nodeIP not in self.videos[video_id]["Neighbours"]:
-                        self.videos[video_id]["Neighbours"].append(nodeIP)
-                        greenPrint(f"[INFO] Cliente {nodeIP} conectado ao vídeo {video_id}.")
                     if not self.videos[video_id]["Streaming"]:
                         self.videos[video_id]["Streaming"] = True
-                        greenPrint(f"[INFO] Transmissão de {video_id} iniciada.")
+                        yellowPrint(f"[INFO] Started transmission of video {video_id}.")
+                    if nodeIP not in self.videos[video_id]["Neighbours"]:
+                        self.videos[video_id]["Neighbours"].append(nodeIP)
+                        yellowPrint(f"[INFO] Streaming video {video_id} to client {nodeIP}.")
 
     def handleStopVideoRequest(self, nodeAddress: Tuple[str, int], videoList: list) -> None:
         """
@@ -191,16 +187,17 @@ class Servidor:
             for video_id in videoList:
                 if video_id in self.videos.keys():
                     self.videos[video_id]["Neighbours"].remove(nodeIP)
+                    yellowPrint(f"[INFO] Stopped streaming video {video_id} to {nodeIP}")
                     if len(self.videos[video_id]["Neighbours"]) == 0:
                         self.videos[video_id]["Streaming"] = False
-                        greenPrint(f"[INFO] Transmissão de {video_id} terminada.") 
+                        greenPrint(f"[INFO] Stopped streaming video {video_id}.") 
             
     def streamVideo (self, video_id: str) -> None:
         """
         Cria continuamente os pacotes de vídeo e transmite para os vizinhos que os pediram.
         """
         video_path = f"../videos/{video_id}.Mjpeg"
-        print(video_id)
+        greyPrint(f"[INFO] Preparing stream of video {video_id}")
         sequenceNumber = 0
         try:
             stream = VideoStream.VideoStream(video_path)
@@ -294,7 +291,7 @@ class Servidor:
                         videoName = os.path.splitext(video)[0]
                         self.videos[videoName] = {"Streaming": False, "Neighbours": []}
                         greyPrint(f"[DATA] Loaded video {video}")
-            greenPrint("[INFO] Loaded videos")
+            greenPrint("[INFO] Loaded all videos")
         except Exception as e:
             redPrint(f"[ERROR] Failed to load videos: {e}")
 
@@ -306,6 +303,7 @@ class Servidor:
             topologyNeighbours = self.topologyNeighbours.copy()
 
         ssocket = None
+        greenPrint(f"[INFO] Starting a flood of the network!")
         for neighbour in topologyNeighbours:
             try:
                 ssocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
