@@ -257,6 +257,8 @@ class oNode:
                 data["hops"] += 1
                 floodPacket = TcpPacket("FLOOD", data)
                 self.propagateFlood(floodPacket, neighbour)
+                with self.latencyLock:
+                    self.latency = latency
                 self.switchBestNeighbour(neighbour)
 
             hops = packet.getData()["hops"]
